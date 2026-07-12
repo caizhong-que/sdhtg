@@ -73,12 +73,13 @@ def soft_segment_membership(
     k_idx = (t_idx - offsets).clamp(min=0)
     valid_k = k_idx >= 0
     cum_t = cumulative.unsqueeze(-1)
-    cum_k = torch.gather(cumulative, 1, k_idx.expand(batch, -1, -1))
+    k_flat = k_idx.expand(batch, -1, -1).reshape(batch, -1)
+    cum_k = torch.gather(cumulative, 1, k_flat).reshape(batch, steps, W)
     membership = (
-        torch.gather(p, 1, k_idx.expand(batch, -1, -1))
+        torch.gather(p, 1, k_flat).reshape(batch, steps, W)
         * torch.exp(cum_t - cum_k)
     )
-    valid_mask = mask.unsqueeze(-1) & mask.gather(1, k_idx).bool() & valid_k
+    valid_mask = mask.unsqueeze(-1) & mask.gather(1, k_flat).reshape(batch, steps, W).bool() & valid_k
     membership = membership * valid_mask.to(dtype)
     del cum_t, cum_k, valid_k
 
