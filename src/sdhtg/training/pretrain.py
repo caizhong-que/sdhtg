@@ -54,9 +54,10 @@ def augment_batch(batch: dict[str, Any], config: dict[str, Any]) -> dict[str, An
     probability = float(config["token_mask_probability"])
     token_mask = (torch.rand_like(result["delta_t"]) < probability) & mask
 
-    # ID 1 is UNK. Entity IDs are preserved to prevent destroying the entire
-    # entity context; template/action/status provide independently masked views.
-    for key in ("template_id", "action_id", "status_id"):
+    # Fully mask template_id during pre-training so the model generalises
+    # via entity/action/status/time rather than memorising template IDs.
+    result["template_id"] = result["template_id"].masked_fill(mask, 1)
+    for key in ("action_id", "status_id"):
         result[key] = result[key].masked_fill(token_mask, 1)
 
     jitter = torch.randn_like(result["delta_t"]) * float(config["time_jitter_std"])
