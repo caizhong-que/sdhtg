@@ -1,0 +1,21 @@
+name: hdfs
+adapter: hdfs
+raw_dir: data/raw/HDFS
+processed_dir: data/processed/hdfs
+files:
+  - {path: HDFS.log, role: log, url: null, sha256: null}
+  - {path: anomaly_label.csv, role: labels, url: null, sha256: null}
+log_format: "<Date> <Time> <Pid> <Level> <Component>: <Content>"
+encoding: utf-8
+timestamp_fields: [Date, Time]
+timestamp_formats: ["%y%m%d %H%M%S"]
+entity_fields: []
+content_field: Content
+label_field: Label
+label_file_key: BlockId
+normal_labels: [Normal, normal, "0"]
+anomaly_labels: [Anomaly, anomaly, "1"]
+sessionization: native
+split: [0.6, 0.2, 0.2]
+max_session_length: 512
+drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

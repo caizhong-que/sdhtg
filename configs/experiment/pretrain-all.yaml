@@ -1,0 +1,4 @@
+pretrain_protocol: all_train
+pretrain_epochs: 10
+pretrain_patience: 5
+pretrain_minimum_delta: 0.0001

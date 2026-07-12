@@ -1,0 +1,64 @@
+model:
+  template_vocab_size: 4096
+  entity_vocab_size: 1024
+  action_vocab_size: 1024
+  status_vocab_size: 4096
+
+  hidden_dim: 256
+  strategy_dim: 64
+  time_dim: 32
+  level_dim: 16
+  num_gru_layers: 2
+  graph_layers: 2
+  graph_heads: 4
+  dropout: 0.10
+
+  num_normal_prototypes: 8
+  prototype_temperature: 0.10
+  detector_pool_temperature: 0.20
+
+  local_temporal_radius:
+    status: 8
+    action: 4
+    entity: 2
+
+  semantic_neighbors:
+    status: 4
+    action: 4
+    entity: 2
+
+  graph_relations:
+    temporal: true
+    semantic: true
+    containment: true
+    reverse_containment: true
+    self_loops: true
+
+  ablation:
+    use_template_source: true
+    use_entity_source: true
+    use_action_source: true
+    use_status_source: true
+    use_time_source: true
+    use_strategy_film: true
+    use_action_boundary: true
+    use_entity_boundary: true
+    use_learned_containment: true
+    use_temporal_edges: true
+    use_semantic_edges: true
+    use_cross_level_messages: true
+    use_prototypes: true
+    detach_boundary_from_graph: false
+    single_boundary: false
+
+  boundary:
+    initial_temperature: 1.0
+    final_temperature: 0.10
+    minimum_temperature: 0.05
+    prior_logit_scale: 1.0
+    force_first_boundary: true
+
+  hierarchy:
+    membership_epsilon: 1.0e-6
+    minimum_node_mass: 1.0e-5
+    normalize_membership: true

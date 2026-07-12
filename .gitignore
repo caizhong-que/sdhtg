@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Data artifacts
+data/raw/*
+!data/raw/README.md
+data/processed/
+
+# Outputs
+outputs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary / partial downloads
+*.part
+*.tmp
+*.swp
+
+# Model checkpoints
+*.pt
+!src/sdhtg/**/*.pt
+*.bin
+
+# Environment
+environment.yml
+__pycache__/
+.mypy_cache/
+.ruff_cache/

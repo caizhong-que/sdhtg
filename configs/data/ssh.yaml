@@ -1,0 +1,23 @@
+name: ssh
+adapter: ssh
+raw_dir: data/raw/SSH
+processed_dir: data/processed/ssh
+files:
+  - {path: SSH.log, role: log, url: null, sha256: null}
+  - {path: labels.csv, role: labels, url: null, sha256: null}
+log_format: "<Date> <Time> <Host> <Component>[<Pid>]: <Content>"
+encoding: utf-8
+timestamp_fields: [Date, Time]
+timestamp_formats: ["%b %d %H:%M:%S"]
+entity_fields: [Host]
+session_fields: []
+content_field: Content
+label_field: Label
+label_join_key: SessionId
+label_file_key: SessionId
+normal_labels: [Normal, normal, "0", "-"]
+anomaly_labels: [Anomaly, anomaly, "1"]
+sessionization: native
+split: [0.6, 0.2, 0.2]
+max_session_length: 512
+drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

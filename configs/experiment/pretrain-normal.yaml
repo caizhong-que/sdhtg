@@ -1,0 +1,5 @@
+# 将这些字段合并到主实验配置，或通过CLI选择协议。
+pretrain_protocol: normal_only
+pretrain_epochs: 10
+pretrain_patience: 5
+pretrain_minimum_delta: 0.0001

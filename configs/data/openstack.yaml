@@ -1,0 +1,24 @@
+name: openstack
+adapter: openstack
+raw_dir: data/raw/OpenStack
+processed_dir: data/processed/openstack
+files:
+  - {path: openstack.log, role: log, url: null, sha256: null}
+  - {path: labels.csv, role: labels, url: null, sha256: null}
+# 必须根据所下载版本核对字段；不匹配会立即失败。
+log_format: "<Logrecord> <Date> <Time> <Pid> <Level> <Component> [<ADDR>] <Content>"
+encoding: utf-8
+timestamp_fields: [Date, Time]
+timestamp_formats: ["%Y-%m-%d %H:%M:%S.%f"]
+entity_fields: [Component]
+session_fields: [Logrecord]
+content_field: Content
+label_field: Label
+label_join_key: Logrecord
+label_file_key: Logrecord
+normal_labels: [Normal, normal, "0", "-"]
+anomaly_labels: [Anomaly, anomaly, "1"]
+sessionization: native
+split: [0.6, 0.2, 0.2]
+max_session_length: 512
+drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}
