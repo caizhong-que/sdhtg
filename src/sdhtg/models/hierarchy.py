@@ -46,10 +46,6 @@ def soft_segment_membership(
 
     This fixed-candidate representation is differentiable and requires no
     discrete segment extraction during training.
-
-    Memory optimisation: when *max_traceback* is set (e.g. 256), candidate
-    segments more than *max_traceback* positions away from the current event
-    are ignored, reducing peak memory from O(BÂ·SÂ²) to O(BÂ·SÂ·W).
     """
     if boundaries.shape != mask.shape:
         raise ValueError("boundaries and mask must have identical shapes")
@@ -66,31 +62,23 @@ def soft_segment_membership(
 
     t = torch.arange(steps, device=device).view(1, steps, 1)
     k = torch.arange(steps, device=device).view(1, 1, steps)
-    W = steps if max_traceback is None else min(steps, max_traceback)
+    causal = k <= t
 
-    offsets = torch.arange(W, device=device).view(1, 1, W)
-    t_idx = torch.arange(steps, device=device).view(1, steps, 1)
-    k_idx = (t_idx - offsets).clamp(min=0)
-    valid_k = k_idx >= 0
-    cum_t = cumulative.unsqueeze(-1)
-    k_flat = k_idx.expand(batch, -1, -1).reshape(batch, -1)
-    cum_k = torch.gather(cumulative, 1, k_flat).reshape(batch, steps, W)
-    membership = (
-        torch.gather(p, 1, k_flat).reshape(batch, steps, W)
-        * torch.exp(cum_t - cum_k)
-    )
-    valid_mask = mask.unsqueeze(-1) & mask.gather(1, k_flat).reshape(batch, steps, W).bool() & valid_k
-    membership = membership * valid_mask.to(dtype)
-    del cum_t, cum_k, valid_k
+    # Broadcast: [B, S, 1] - [B, 1, S] = [B, S, S]
+    survival = torch.exp(cumulative.unsqueeze(2) - cumulative.unsqueeze(1))
+    membership = p.unsqueeze(1) * survival
+    valid = mask.unsqueeze(2) & mask.unsqueeze(1) & causal
+    membership = membership * valid.to(dtype)
+    del survival, valid  # free [B,S,S] intermediates
 
     # The first valid candidate covers all probability not otherwise assigned.
-    row_mass = membership.sum(dim=-1, keepdim=True)
+    row_mass = membership.sum(dim=2, keepdim=True)
     residual = (1.0 - row_mass).clamp_min(0.0)
-    first_candidate = torch.zeros((1, 1, W), device=device, dtype=dtype)
+    first_candidate = torch.zeros((1, 1, steps), device=device, dtype=dtype)
     first_candidate[..., 0] = 1.0
     membership = membership + residual * first_candidate
-    membership = membership * valid_mask.to(dtype)
-    del residual, first_candidate, valid_mask
+    membership = membership * mask.unsqueeze(2).to(dtype)
+    del residual, first_candidate
     return membership
 
 
