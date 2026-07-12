@@ -13,6 +13,10 @@ seeds: [42, 123, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
 
 deterministic: true
 batch_size: 8
+# Template ID masking ratio during supervised training.
+# Set >0 (e.g. 0.5) to prevent over-reliance on template-ID
+# memorisation; forces the model to generalise via semantic signals.
+mask_template_prob: 0.5
 max_epochs: 100
 pretrain_epochs: 10
 learning_rate: 0.0001
@@ -47,7 +51,7 @@ loss:
   prototype_weight: 0.05
   boundary_weight: 0.01
   hierarchy_weight: 0.01
-  contrastive_weight: 0.10
+  contrastive_weight: 0.10  # only effective during pre-training (supervised: always 0)
   prototype_margin: 0.5
   action_boundary_rate: 0.05
   entity_boundary_rate: 0.01

@@ -32,7 +32,6 @@ def soft_segment_membership(
     boundaries: Tensor,
     mask: Tensor,
     epsilon: float,
-    max_traceback: int | None = None,
 ) -> Tensor:
     """
     Returns membership M[b, event, candidate_segment].

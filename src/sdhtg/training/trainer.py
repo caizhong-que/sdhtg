@@ -31,6 +31,10 @@ class Trainer:
         self.optimizer.zero_grad(set_to_none=True); accumulation=int(self.config["grad_accumulation_steps"])
         for index,batch in enumerate(self.train_loader):
             batch=move_batch_to_device(batch,self.device)
+            mask_prob=self.config.get("mask_template_prob",0.0)
+            if mask_prob>0:
+                tm=(torch.rand_like(batch["delta_t"])<mask_prob)&batch["mask"]
+                batch["template_id"]=batch["template_id"].masked_fill(tm,1)
             with self._autocast():
                 output=self.model(batch,boundary_temperature=state.boundary_temperature,film_strength=state.film_strength)
                 loss=self.criterion(output,batch["label"],boundary_scale=state.boundary_loss_scale).total/accumulation
