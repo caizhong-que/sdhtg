@@ -3,7 +3,7 @@ data:
   train_split: train
   validation_split: validation
   test_split: test
-  num_workers: 4
+  num_workers: 2
   pin_memory: true
 
 model_config: configs/model/sdhtg.yaml
@@ -11,11 +11,8 @@ output_dir: outputs/bgl/main
 seed: 42
 seeds: [42, 123, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
 
-deterministic: true
-batch_size: 8
-# Template ID masking ratio during supervised training.
-# Set >0 (e.g. 0.5) to prevent over-reliance on template-ID
-# memorisation; forces the model to generalise via semantic signals.
+deterministic: false
+batch_size: 64
 mask_template_prob: 0.5
 max_epochs: 100
 pretrain_epochs: 10
@@ -51,7 +48,7 @@ loss:
   prototype_weight: 0.05
   boundary_weight: 0.01
   hierarchy_weight: 0.01
-  contrastive_weight: 0.10  # only effective during pre-training (supervised: always 0)
+  contrastive_weight: 0.10
   prototype_margin: 0.5
   action_boundary_rate: 0.05
   entity_boundary_rate: 0.01

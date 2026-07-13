@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -113,7 +114,8 @@ class ContrastivePretrainer:
         state = self.curriculum.at(epoch, int(self.config["pretrain_epochs"]))
         losses = []
 
-        for batch in self.loader:
+        pbar = tqdm(self.loader, desc=f"Epoch {epoch}", unit="batch")
+        for batch in pbar:
             batch = move_batch_to_device(batch, self.device)
             first = augment_batch(batch, self.config["contrastive"])
             second = augment_batch(batch, self.config["contrastive"])
@@ -154,6 +156,7 @@ class ContrastivePretrainer:
             self.scaler.step(self.optimizer)
             self.scaler.update()
             self.global_step += 1
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
             losses.append(float(loss.detach()))
 
         if not losses:

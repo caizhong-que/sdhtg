@@ -2,6 +2,7 @@ from __future__ import annotations
 import json
 from contextlib import nullcontext
 from pathlib import Path
+from tqdm import tqdm
 import numpy as np
 import torch
 from torch import nn
@@ -27,9 +28,13 @@ class Trainer:
     def _autocast(self): return torch.autocast(device_type="cuda",dtype=torch.float16) if self.amp else nullcontext()
 
     def train_epoch(self, epoch):
-        self.model.train(); state=self.curriculum.at(epoch,self.config["max_epochs"]); totals=[]
-        self.optimizer.zero_grad(set_to_none=True); accumulation=int(self.config["grad_accumulation_steps"])
-        for index,batch in enumerate(self.train_loader):
+        self.model.train()
+        state=self.curriculum.at(epoch,self.config["max_epochs"])
+        totals=[]
+        self.optimizer.zero_grad(set_to_none=True)
+        accumulation=int(self.config["grad_accumulation_steps"])
+        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch}", unit="batch")
+        for index,batch in enumerate(pbar):
             batch=move_batch_to_device(batch,self.device)
             mask_prob=self.config.get("mask_template_prob",0.0)
             if mask_prob>0:
@@ -40,12 +45,16 @@ class Trainer:
                 loss=self.criterion(output,batch["label"],boundary_scale=state.boundary_loss_scale).total/accumulation
             self.scaler.scale(loss).backward()
             if (index+1)%accumulation==0 or index+1==len(self.train_loader):
-                self.scaler.unscale_(self.optimizer); nn.utils.clip_grad_norm_(self.model.parameters(),self.config["grad_clip_norm"])
-                self.scaler.step(self.optimizer); self.scaler.update(); self.optimizer.zero_grad(set_to_none=True); self.global_step+=1
+                self.scaler.unscale_(self.optimizer)
+                nn.utils.clip_grad_norm_(self.model.parameters(),self.config["grad_clip_norm"])
+                self.scaler.step(self.optimizer); self.scaler.update()
+                self.optimizer.zero_grad(set_to_none=True)
+                self.global_step+=1
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
             totals.append(float(loss.detach())*accumulation)
         return {"loss":float(np.mean(totals)),"temperature":state.boundary_temperature,"film_strength":state.film_strength}
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def predict(self, loader):
         self.model.eval(); labels=[]; scores=[]; losses=[]
         for batch in loader:

@@ -73,6 +73,10 @@ def main() -> None:
         model=model,
     )
 
+    train_subset = int(len(train_dataset) * 0.1)
+    train_dataset = torch.utils.data.Subset(train_dataset, range(train_subset))
+    # val_subset = int(len(validation_dataset) * 0.1)
+    # validation_dataset = torch.utils.data.Subset(validation_dataset, range(val_subset))
     pretrain_result = None
     if not args.skip_pretrain and int(cfg.get("pretrain_epochs", 0)) > 0:
         protocol = args.pretrain_protocol or cfg.get("pretrain_protocol", "normal_only")
