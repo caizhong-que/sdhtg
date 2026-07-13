@@ -147,7 +147,11 @@ class HeterogeneousTemporalGraphEncoder(nn.Module):
     def forward(self, graphs: list[HeteroData]) -> GraphEncoderOutput:
         if not graphs:
             raise ValueError("at least one heterogeneous graph is required")
-        graph = Batch.from_data_list(graphs)
+        # P1: pre-batched graph (single entry with _num_graphs and batch vectors)
+        if len(graphs) == 1:
+            graph = graphs[0]
+        else:
+            graph = Batch.from_data_list(graphs)
         embeddings = {
             node_type: graph[node_type].x for node_type in NODE_TYPES
         }
