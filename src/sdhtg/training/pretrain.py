@@ -122,20 +122,20 @@ class ContrastivePretrainer:
             self.optimizer.zero_grad(set_to_none=True)
 
             with self._autocast():
-                first_output = self.model(
-                    first,
+                combined = {}
+                for k in first:
+                    if isinstance(first[k], Tensor):
+                        combined[k] = torch.cat([first[k], second[k]], dim=0)
+                    else:
+                        combined[k] = first[k] + second[k]
+                output = self.model(
+                    combined,
                     boundary_temperature=state.boundary_temperature,
                     film_strength=state.film_strength,
                     return_graph=False,
                 )
-                second_output = self.model(
-                    second,
-                    boundary_temperature=state.boundary_temperature,
-                    film_strength=state.film_strength,
-                    return_graph=False,
-                )
-                first_z = self.projection(first_output.graph_embedding)
-                second_z = self.projection(second_output.graph_embedding)
+                z = self.projection(output.graph_embedding)
+                first_z, second_z = z.chunk(2, dim=0)
                 # Instance-level positives make both protocols valid. In
                 # normal_only mode, passing labels would otherwise remove every
                 # normal example from the negative set.
