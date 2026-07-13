@@ -58,23 +58,10 @@ class BucketBatchSampler(Sampler):
 
 
 def make_loader(dataset, cfg, *, shuffle: bool, seed: int):
-    if shuffle:
-        sampler = BucketBatchSampler(dataset.lengths, int(cfg["batch_size"]), shuffle=True)
-        return DataLoader(
-            dataset,
-            batch_sampler=sampler,
-            num_workers=int(cfg["data"]["num_workers"]),
-            collate_fn=collate_sessions,
-            pin_memory=bool(cfg["data"]["pin_memory"]),
-            persistent_workers=int(cfg["data"]["num_workers"]) > 0,
-        )
-    # Validation: no shuffle, no bucketing needed (eval memory is lower)
-    generator = torch.Generator().manual_seed(seed)
+    sampler = BucketBatchSampler(dataset.lengths, int(cfg["batch_size"]), shuffle=shuffle)
     return DataLoader(
         dataset,
-        batch_size=int(cfg["batch_size"]),
-        shuffle=False,
-        generator=generator,
+        batch_sampler=sampler,
         num_workers=int(cfg["data"]["num_workers"]),
         collate_fn=collate_sessions,
         pin_memory=bool(cfg["data"]["pin_memory"]),
