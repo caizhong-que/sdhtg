@@ -32,8 +32,7 @@ class SessionDataset(torch.utils.data.Dataset):
 
     @property
     def rows(self):
-        """Lazy row-like iteration; avoids to_dict() object blowup.
-        Returns a fresh iterator each time so multiple passes are safe."""
+        """Lazy row-like iteration; returns a fresh iterator each time."""
         class _Rows:
             def __init__(self, frame):
                 self._frame = frame
@@ -45,6 +44,11 @@ class SessionDataset(torch.utils.data.Dataset):
                 for i in range(len(self._frame)):
                     yield self._frame.iloc[i].to_dict()
         return _Rows(self._frame)
+
+    @property
+    def lengths(self):
+        """Per-sample sequence lengths for batch bucketing."""
+        return [len(x) for x in self._frame["template_ids"]]
 
     def __len__(self) -> int:
         return len(self._frame)

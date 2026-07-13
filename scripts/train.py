@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 import yaml
 from torch.utils.data import DataLoader
+from torch.utils.data import Sampler
 
 from sdhtg.data.collate import collate_sessions
 from sdhtg.data.datasets import SessionDataset
@@ -18,13 +19,57 @@ from sdhtg.training.reproducibility import seed_everything, write_training_manif
 from sdhtg.training.trainer import Trainer
 
 
+class BucketBatchSampler(Sampler):
+    """Groups indices by quantized sequence length so each batch has similar-length
+    sequences.  This minimises padding waste and prevents a single long sequence
+    from forcing an entire batch to pad to its length (O(B-SÂ²) memory blowup)."""
+    BUCKETS = [1, 2, 3, 4, 8, 16, 32, 64, 128, 256, 512]
+
+    def __init__(self, lengths: list[int], batch_size: int, shuffle: bool = True):
+        # Assign each index to a length bucket
+        buckets: dict[int, list[int]] = {}
+        for idx, l in enumerate(lengths):
+            for b in self.BUCKETS:
+                if l <= b:
+                    buckets.setdefault(b, []).append(idx)
+                    break
+        # Build batches within each bucket
+        self.batches: list[list[int]] = []
+        for _, indices in sorted(buckets.items()):
+            rng = __import__("numpy").random.default_rng(seed=hash(str(indices)) & 0xFFFFFFFF)
+            if shuffle:
+                rng.shuffle(indices)
+            for i in range(0, len(indices), batch_size):
+                self.batches.append(indices[i:i+batch_size])
+        if shuffle:
+            rng2 = __import__("numpy").random.default_rng(seed=42)
+            rng2.shuffle(self.batches)
+
+    def __len__(self) -> int:
+        return len(self.batches)
+
+    def __iter__(self):
+        return iter(self.batches)
+
+
 def make_loader(dataset, cfg, *, shuffle: bool, seed: int):
+    if shuffle:
+        sampler = BucketBatchSampler(dataset.lengths, int(cfg["batch_size"]), shuffle=True)
+        return DataLoader(
+            dataset,
+            batch_sampler=sampler,
+            num_workers=int(cfg["data"]["num_workers"]),
+            collate_fn=collate_sessions,
+            pin_memory=bool(cfg["data"]["pin_memory"]),
+            persistent_workers=int(cfg["data"]["num_workers"]) > 0,
+        )
+    # Validation: no shuffle, no bucketing needed (eval memory is lower)
     generator = torch.Generator().manual_seed(seed)
     return DataLoader(
         dataset,
         batch_size=int(cfg["batch_size"]),
-        shuffle=shuffle,
-        generator=generator if shuffle else None,
+        shuffle=False,
+        generator=generator,
         num_workers=int(cfg["data"]["num_workers"]),
         collate_fn=collate_sessions,
         pin_memory=bool(cfg["data"]["pin_memory"]),
@@ -72,11 +117,6 @@ def main() -> None:
         data_paths=[str(parquet), str(processed / "manifest.json")],
         model=model,
     )
-
-    train_subset = int(len(train_dataset) * 0.1)
-    train_dataset = torch.utils.data.Subset(train_dataset, range(train_subset))
-    # val_subset = int(len(validation_dataset) * 0.1)
-    # validation_dataset = torch.utils.data.Subset(validation_dataset, range(val_subset))
     pretrain_result = None
     if not args.skip_pretrain and int(cfg.get("pretrain_epochs", 0)) > 0:
         protocol = args.pretrain_protocol or cfg.get("pretrain_protocol", "normal_only")
