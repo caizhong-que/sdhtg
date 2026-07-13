@@ -3,7 +3,7 @@ data:
   train_split: train
   validation_split: validation
   test_split: test
-  num_workers: 2
+  num_workers: 0
   pin_memory: true
 
 model_config: configs/model/sdhtg.yaml
