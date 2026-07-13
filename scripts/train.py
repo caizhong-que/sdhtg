@@ -20,27 +20,34 @@ from sdhtg.training.trainer import Trainer
 
 
 class BucketBatchSampler(Sampler):
-    """Groups indices by quantized sequence length so each batch has similar-length
-    sequences.  This minimises padding waste and prevents a single long sequence
-    from forcing an entire batch to pad to its length (O(B-SÂ²) memory blowup)."""
-    BUCKETS = [1, 2, 3, 4, 8, 16, 32, 64, 128, 256, 512]
+    """Groups indices by quantized length; short sequences use larger batches.
 
-    def __init__(self, lengths: list[int], batch_size: int, shuffle: bool = True):
-        # Assign each index to a length bucket
+    The config ``batch_size`` is the maximum allowed (for length-1 buckets).
+    Longer sequences use proportionally smaller batches to keep
+    :math:`B \\times S^2` bounded, preventing OOM.
+    """
+    BUCKET_KEYS = [1, 2, 3, 4, 8, 16, 32, 64, 128, 256, 512]
+
+    def __init__(self, lengths: list[int], max_batch_size: int, shuffle: bool = True):
         buckets: dict[int, list[int]] = {}
         for idx, l in enumerate(lengths):
-            for b in self.BUCKETS:
+            for b in self.BUCKET_KEYS:
                 if l <= b:
                     buckets.setdefault(b, []).append(idx)
                     break
-        # Build batches within each bucket
+
         self.batches: list[list[int]] = []
         for _, indices in sorted(buckets.items()):
-            rng = __import__("numpy").random.default_rng(seed=hash(str(indices)) & 0xFFFFFFFF)
+            # Safer batch size: keep B * key roughly constant
+            key = _
+            bs = max(16, min(len(indices), max_batch_size // (key if key > 1 else 1) * 2))
+            # Round to nearest power of two
+            bs = 1 << (bs.bit_length() - 1)
+            rng = __import__("numpy").random.default_rng(seed=(hash(str(indices)) & 0xFFFFFFFF))
             if shuffle:
                 rng.shuffle(indices)
-            for i in range(0, len(indices), batch_size):
-                self.batches.append(indices[i:i+batch_size])
+            for i in range(0, len(indices), bs):
+                self.batches.append(indices[i:i+bs])
         if shuffle:
             rng2 = __import__("numpy").random.default_rng(seed=42)
             rng2.shuffle(self.batches)
@@ -54,7 +61,8 @@ class BucketBatchSampler(Sampler):
 
 def make_loader(dataset, cfg, *, shuffle: bool, seed: int):
     if shuffle:
-        sampler = BucketBatchSampler(dataset.lengths, int(cfg["batch_size"]), shuffle=True)
+        max_bs = int(cfg["batch_size"])
+        sampler = BucketBatchSampler(dataset.lengths, max_bs, shuffle=True)
         return DataLoader(
             dataset,
             batch_sampler=sampler,
