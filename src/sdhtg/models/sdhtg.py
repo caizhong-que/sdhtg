@@ -11,7 +11,7 @@ from .config import SDHTGModelConfig
 from .detector import DetectorOutput, HierarchicalAnomalyDetector
 from .event_encoder import EventEncoderOutput, MultiSourceEventEncoder
 from .graph import GraphEncoderOutput, HeterogeneousTemporalGraphEncoder
-from .graph_builder import GraphBuildResult, HeterogeneousGraphBuilder
+from .graph_builder_batched import GraphBuildResult, HeterogeneousGraphBuilder
 from .hierarchy import DifferentiableHierarchy, HierarchyOutput
 from .strategy import CausalStrategyFiLM, StrategyOutput
 from .utils import assert_finite, validate_sequence_batch

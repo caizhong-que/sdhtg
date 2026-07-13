@@ -68,6 +68,11 @@ class HierarchicalAnomalyDetector(nn.Module):
 
     @staticmethod
     def _number_of_graphs(output: GraphEncoderOutput) -> int:
+        # Pre-batched graph (P1) sets _num_graphs; fallback to batch vector
+        for node_type in NODE_TYPES:
+            b = output.graph[node_type].batch
+            if b.numel() > 0:
+                return int(b.max().item()) + 1
         return int(output.graph.num_graphs)
 
     def _pool_level(
