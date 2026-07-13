@@ -6,6 +6,7 @@ from pathlib import Path
 
 import torch
 import yaml
+import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data import Sampler
 
@@ -20,15 +21,10 @@ from sdhtg.training.trainer import Trainer
 
 
 class BucketBatchSampler(Sampler):
-    """Groups indices by quantized length; short sequences use larger batches.
-
-    The config ``batch_size`` is the maximum allowed (for length-1 buckets).
-    Longer sequences use proportionally smaller batches to keep
-    :math:`B \\times S^2` bounded, preventing OOM.
-    """
+    """Groups indices by quantized length; shorter sequences use larger batches."""
     BUCKET_KEYS = [1, 2, 3, 4, 8, 16, 32, 64, 128, 256, 512]
 
-    def __init__(self, lengths: list[int], max_batch_size: int, shuffle: bool = True):
+    def __init__(self, lengths: list[int], batch_size: int, shuffle: bool = True):
         buckets: dict[int, list[int]] = {}
         for idx, l in enumerate(lengths):
             for b in self.BUCKET_KEYS:
@@ -38,19 +34,21 @@ class BucketBatchSampler(Sampler):
 
         self.batches: list[list[int]] = []
         for _, indices in sorted(buckets.items()):
-            # Safer batch size: keep B * key roughly constant
             key = _
-            bs = max(16, min(len(indices), max_batch_size // (key if key > 1 else 1) * 2))
-            # Round to nearest power of two
-            bs = 1 << (bs.bit_length() - 1)
-            rng = __import__("numpy").random.default_rng(seed=(hash(str(indices)) & 0xFFFFFFFF))
+            # Safe batch sizes: short sequences need tiny [B,S,S] matrices
+            if key <= 4:   bs = max(512, batch_size)          # ≤4  events → up to 2048
+            elif key <= 8:  bs = min(512, batch_size // 4)    # 5-8  events → 512
+            elif key <= 16: bs = min(256, batch_size // 8)    # 9-16 events → 256
+            elif key <= 64: bs = 128                          # 17-64 events → 128
+            else:           bs = 64                           # >64  events → 64
+            bs = min(bs, len(indices))
+            rng = np.random.default_rng(seed=(hash(str(indices)) & 0xFFFFFFFF))
             if shuffle:
                 rng.shuffle(indices)
             for i in range(0, len(indices), bs):
                 self.batches.append(indices[i:i+bs])
         if shuffle:
-            rng2 = __import__("numpy").random.default_rng(seed=42)
-            rng2.shuffle(self.batches)
+            np.random.default_rng(seed=42).shuffle(self.batches)
 
     def __len__(self) -> int:
         return len(self.batches)
@@ -61,8 +59,7 @@ class BucketBatchSampler(Sampler):
 
 def make_loader(dataset, cfg, *, shuffle: bool, seed: int):
     if shuffle:
-        max_bs = int(cfg["batch_size"])
-        sampler = BucketBatchSampler(dataset.lengths, max_bs, shuffle=True)
+        sampler = BucketBatchSampler(dataset.lengths, int(cfg["batch_size"]), shuffle=True)
         return DataLoader(
             dataset,
             batch_sampler=sampler,
