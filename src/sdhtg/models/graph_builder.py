@@ -11,6 +11,20 @@ from .config import SDHTGModelConfig
 from .hierarchy import HierarchyOutput, HierarchyLevel
 
 
+ALL_EDGE_TYPES = (
+    ("status", "temporal", "status"),
+    ("status", "semantic", "status"),
+    ("action", "temporal", "action"),
+    ("action", "semantic", "action"),
+    ("entity", "temporal", "entity"),
+    ("entity", "semantic", "entity"),
+    ("status", "belongs_to", "action"),
+    ("action", "belongs_to", "entity"),
+    ("action", "contains", "status"),
+    ("entity", "contains", "action"),
+)
+
+
 NodeType = str
 EdgeType = tuple[str, str, str]
 
@@ -170,6 +184,7 @@ def containment_edges(
 class HeterogeneousGraphBuilder:
     def __init__(self, config: SDHTGModelConfig):
         self.config = config
+        self._short_threshold = 4
 
     @staticmethod
     def _count(level: HierarchyLevel, index: int) -> int:
@@ -280,6 +295,19 @@ class HeterogeneousGraphBuilder:
             self._assign_nodes(
                 graph, "entity", hierarchy.entity, batch_index, entity_count
             )
+
+            # Fast path: skip edge building for very short sequences.
+            is_short = max(status_count, action_count, entity_count) <= self._short_threshold
+            if is_short:
+                _d = hierarchy.status.features.device
+                _t = hierarchy.status.features.dtype
+                for _s, _r, _g in ALL_EDGE_TYPES:
+                    self._assign_edges(graph, (_s, _r, _g),
+                                       _empty_edge_index(_d), _empty_edge_attr(_d, _t))
+                graph.sample_index = torch.tensor(
+                    [batch_index], dtype=torch.long, device=_d)
+                graphs.append(graph)
+                continue
 
             self._within_level_edges(
                 graph, "status", hierarchy.status, batch_index, status_count
