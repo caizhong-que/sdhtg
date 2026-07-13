@@ -11,20 +11,6 @@ from .config import SDHTGModelConfig
 from .hierarchy import HierarchyOutput, HierarchyLevel
 
 
-ALL_EDGE_TYPES = (
-    ("status", "temporal", "status"),
-    ("status", "semantic", "status"),
-    ("action", "temporal", "action"),
-    ("action", "semantic", "action"),
-    ("entity", "temporal", "entity"),
-    ("entity", "semantic", "entity"),
-    ("status", "belongs_to", "action"),
-    ("action", "belongs_to", "entity"),
-    ("action", "contains", "status"),
-    ("entity", "contains", "action"),
-)
-
-
 NodeType = str
 EdgeType = tuple[str, str, str]
 
@@ -45,20 +31,6 @@ def _empty_edge_attr(device: torch.device, dtype: torch.dtype) -> Tensor:
     return torch.empty((0, 2), dtype=dtype, device=device)
 
 
-def _append_edge(
-    sources: list[int],
-    targets: list[int],
-    attributes: list[list[Tensor]],
-    source: int,
-    target: int,
-    weight: Tensor,
-    delta: Tensor,
-) -> None:
-    sources.append(source)
-    targets.append(target)
-    attributes.append([weight, delta])
-
-
 def local_temporal_edges(
     positions: Tensor,
     radius: int,
@@ -67,30 +39,27 @@ def local_temporal_edges(
     count = positions.numel()
     device = positions.device
     dtype = positions.dtype
-    sources: list[int] = []
-    targets: list[int] = []
-    attrs: list[list[Tensor]] = []
 
-    for source in range(count):
-        left = max(0, source - radius)
-        right = min(count, source + radius + 1)
-        for target in range(left, right):
-            if source == target and not self_loops:
-                continue
-            delta = (positions[target] - positions[source]).abs()
-            weight = torch.exp(-delta / max(float(radius), 1.0))
-            _append_edge(
-                sources, targets, attrs, source, target, weight, delta
-            )
-
-    if not sources:
+    if count == 0:
         return _empty_edge_index(device), _empty_edge_attr(device, dtype)
-    edge_index = torch.tensor(
-        [sources, targets], dtype=torch.long, device=device
-    )
-    edge_attr = torch.stack(
-        [torch.stack(pair) for pair in attrs], dim=0
-    ).to(dtype)
+
+    offsets = torch.arange(-radius, radius + 1, device=device)
+    if not self_loops:
+        offsets = offsets[offsets != 0]
+
+    src = torch.arange(count, device=device).unsqueeze(1)          # [count, 1]
+    tgt = src + offsets.unsqueeze(0)                               # [count, 2R+1]
+    valid = (tgt >= 0) & (tgt < count)                             # [count, 2R+1]
+    src = src.expand(-1, offsets.size(0))[valid]
+    tgt = tgt[valid]
+
+    if src.numel() == 0:
+        return _empty_edge_index(device), _empty_edge_attr(device, dtype)
+
+    delta = (positions[tgt] - positions[src]).abs()
+    weight = torch.exp(-delta / max(float(radius), 1.0))
+    edge_index = torch.stack((src, tgt), dim=0)
+    edge_attr = torch.stack((weight, delta), dim=-1)
     return edge_index, edge_attr
 
 
@@ -103,48 +72,46 @@ def semantic_edges(
     device = semantic_ids.device
     dtype = positions.dtype
 
-    # Build semantic_id -> indices map: O(S) instead of O(SÂ²)
     groups: dict[int, list[int]] = {}
     for idx in range(count):
         sid = int(semantic_ids[idx].item())
         if sid > 1:
             groups.setdefault(sid, []).append(idx)
 
-    sources: list[int] = []
-    targets: list[int] = []
-    attrs: list[list[Tensor]] = []
+    if not groups:
+        return _empty_edge_index(device), _empty_edge_attr(device, dtype)
+
+    src_list, tgt_list, w_list, d_list = [], [], [], []
 
     for identifier, group in groups.items():
-        group_size = len(group)
-        if group_size < 2:
+        m = len(group)
+        if m < 2:
             continue
-        # Each node connects to its nearest neighbours within the same
-        # semantic group, up to maximum_neighbors.
-        candidates = []
-        for src_idx in group:
-            src_pos = positions[src_idx]
-            for tgt_idx in group:
-                if tgt_idx == src_idx:
-                    continue
-                dist = float((positions[tgt_idx] - src_pos).abs().item())
-                candidates.append((dist, src_idx, tgt_idx))
-        candidates.sort(key=lambda x: (x[0], x[1], x[2]))
-        seen: dict[int, int] = {}
-        for dist, src, tgt in candidates:
-            if seen.get(src, 0) >= maximum_neighbors:
-                continue
-            delta = (positions[tgt] - positions[src]).abs()
-            weight = 1.0 / (1.0 + delta)
-            _append_edge(sources, targets, attrs, src, tgt, weight, delta)
-            seen[src] = seen.get(src, 0) + 1
 
-    if not sources:
+        # GPU distance matrix: [m, m], no .item() sync
+        pos_g = positions[group].unsqueeze(1)                # [m, 1]
+        dist = (pos_g - pos_g.T).abs()                       # [m, m]
+        dist.fill_diagonal_(float('inf'))
+
+        k = min(maximum_neighbors, m - 1)
+        topk_val, topk_idx = dist.topk(k, dim=1, largest=False)  # [m, k]
+
+        # Vectorised edge construction: no Python inner loops
+        grp = torch.tensor(group, device=device)             # [m]
+        src_idx = grp.unsqueeze(1).expand(-1, k).reshape(-1) # [m*k]
+        tgt_idx = grp[topk_idx.reshape(-1)]                  # [m*k]
+
+        src_list.append(src_idx)
+        tgt_list.append(tgt_idx)
+        w_list.append((1.0 / (1.0 + topk_val)).reshape(-1))
+        d_list.append(topk_val.reshape(-1))
+
+    if not src_list:
         return _empty_edge_index(device), _empty_edge_attr(device, dtype)
+
     return (
-        torch.tensor([sources, targets], dtype=torch.long, device=device),
-        torch.stack(
-            [torch.stack(pair) for pair in attrs], dim=0
-        ).to(dtype),
+        torch.stack([torch.cat(src_list), torch.cat(tgt_list)], dim=0),
+        torch.stack([torch.cat(w_list), torch.cat(d_list)], dim=-1),
     )
 
 
@@ -184,7 +151,6 @@ def containment_edges(
 class HeterogeneousGraphBuilder:
     def __init__(self, config: SDHTGModelConfig):
         self.config = config
-        self._short_threshold = 4
 
     @staticmethod
     def _count(level: HierarchyLevel, index: int) -> int:
@@ -295,19 +261,6 @@ class HeterogeneousGraphBuilder:
             self._assign_nodes(
                 graph, "entity", hierarchy.entity, batch_index, entity_count
             )
-
-            # Fast path: skip edge building for very short sequences.
-            is_short = max(status_count, action_count, entity_count) <= self._short_threshold
-            if is_short:
-                _d = hierarchy.status.features.device
-                _t = hierarchy.status.features.dtype
-                for _s, _r, _g in ALL_EDGE_TYPES:
-                    self._assign_edges(graph, (_s, _r, _g),
-                                       _empty_edge_index(_d), _empty_edge_attr(_d, _t))
-                graph.sample_index = torch.tensor(
-                    [batch_index], dtype=torch.long, device=_d)
-                graphs.append(graph)
-                continue
 
             self._within_level_edges(
                 graph, "status", hierarchy.status, batch_index, status_count
