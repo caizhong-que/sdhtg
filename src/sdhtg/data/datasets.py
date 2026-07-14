@@ -50,6 +50,10 @@ class SessionDataset(torch.utils.data.Dataset):
         """Per-sample sequence lengths for batch bucketing."""
         return [len(x) for x in self._frame["template_ids"]]
 
+    @property
+    def labels(self):
+        return self._frame["label"].values
+
     def __len__(self) -> int:
         return len(self._frame)
 
