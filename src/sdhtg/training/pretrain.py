@@ -42,6 +42,10 @@ class LabelFilteredDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.indices)
 
+    @property
+    def lengths(self):
+        return [self.dataset.lengths[i] for i in self.indices]
+
     def __getitem__(self, index):
         return self.dataset[self.indices[index]]
 
