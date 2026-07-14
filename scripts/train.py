@@ -85,6 +85,8 @@ def main() -> None:
     )
     parser.add_argument("--skip-pretrain", action="store_true")
     parser.add_argument("--pretrain-only", action="store_true")
+    parser.add_argument("--load-pretrained", type=str,
+                        help="load pretrained model weights and skip pretraining")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
@@ -107,6 +109,15 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model(cfg["model_config"], overrides).to(device)
+
+    if args.load_pretrained:
+        ckpt = torch.load(args.load_pretrained, map_location=device, weights_only=False)
+        sd = ckpt["model"]
+        if any(k.startswith("model.") for k in sd):
+            sd = {k[6:]: v for k, v in sd.items() if k.startswith("model.")}
+        model.load_state_dict(sd)
+        logger.info("loaded pretrained model from %s", args.load_pretrained)
+
     train_dataset = SessionDataset(str(parquet), "train")
     validation_dataset = SessionDataset(str(parquet), "validation")
     logger.info("model  params=%d  train=%d  valid=%d", sum(p.numel() for p in model.parameters()), len(train_dataset), len(validation_dataset))
@@ -121,7 +132,7 @@ def main() -> None:
         model=model,
     )
     pretrain_result = None
-    if not args.skip_pretrain and int(cfg.get("pretrain_epochs", 0)) > 0:
+    if not args.skip_pretrain and not args.load_pretrained and int(cfg.get("pretrain_epochs", 0)) > 0:
         protocol = args.pretrain_protocol or cfg.get("pretrain_protocol", "normal_only")
         logger.info("pretrain  protocol=%s  epochs=%d  lr=%g", protocol, cfg["pretrain_epochs"], cfg["pretrain_learning_rate"])
         pretrain_dataset = LabelFilteredDataset(train_dataset, protocol)
