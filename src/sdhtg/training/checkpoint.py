@@ -17,16 +17,19 @@ def rng_state() -> dict[str, Any]:
     }
 
 
+def _as_byte(x):
+    return x if isinstance(x, torch.Tensor) and x.dtype == torch.uint8 else torch.as_tensor(x, dtype=torch.uint8, device='cpu')
+
 def restore_rng(state: dict[str, Any]) -> None:
     try:
         random.setstate(state["python"])
         np.random.set_state(state["numpy"])
-        torch.set_rng_state(state["torch"])
+        torch.set_rng_state(_as_byte(state["torch"]))
     except Exception as exc:
         warnings.warn(f"RNG state restoration failed ({exc}); continuing without it")
     if state.get("cuda") is not None and torch.cuda.is_available():
         try:
-            torch.cuda.set_rng_state_all(state["cuda"])
+            torch.cuda.set_rng_state_all([_as_byte(s) for s in state["cuda"]])
         except Exception as exc:
             warnings.warn(f"CUDA RNG state restoration failed ({exc})")
 
