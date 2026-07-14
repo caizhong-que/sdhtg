@@ -6,6 +6,8 @@ import torch
 
 
 def seed_everything(seed: int, deterministic: bool=True) -> None:
+    if deterministic and torch.cuda.is_available():
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     os.environ["PYTHONHASHSEED"]=str(seed); random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark=not deterministic; torch.backends.cudnn.deterministic=deterministic
