@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from contextlib import nullcontext
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any
 from tqdm import tqdm
@@ -16,6 +17,9 @@ from sdhtg.losses.contrastive import ProjectionHead, supervised_info_nce
 from .checkpoint import CheckpointManager
 from .curriculum import Curriculum
 from .reproducibility import hash_state_dict
+
+
+logger = logging.getLogger("sdhtg.pretrain")
 
 
 @dataclass
@@ -167,6 +171,7 @@ class ContrastivePretrainer:
 
         if not losses:
             raise ValueError("pretraining loader produced zero batches")
+        logger.info("epoch %d  loss=%.4f  batches=%d", epoch, float(np.mean(losses)), len(self.loader))
         return float(np.mean(losses))
 
     def _save(self, name: str, epoch: int, loss: float) -> Path:
@@ -218,8 +223,10 @@ class ContrastivePretrainer:
             if improved:
                 self.best_loss = loss
                 self.patience_count = 0
+                logger.info("  best  loss=%.4f", loss)
             else:
                 self.patience_count += 1
+                logger.info("  no_improve  loss=%.4f  pat=%d/%d", loss, self.patience_count, patience)
 
             history.append({"epoch": epoch, "loss": loss})
             self._save("pretrain_last", epoch, loss)

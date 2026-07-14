@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 import torch
@@ -18,6 +19,9 @@ from sdhtg.models.factory import build_model
 from sdhtg.training.pretrain import ContrastivePretrainer, LabelFilteredDataset
 from sdhtg.training.reproducibility import seed_everything, write_training_manifest
 from sdhtg.training.trainer import Trainer
+
+
+logger = logging.getLogger("sdhtg")
 
 
 class BucketBatchSampler(Sampler):
@@ -84,11 +88,17 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    logger.info("started  seed=%d  device=%s", int(args.seed if args.seed is not None else cfg["seed"]), device.type)
+
     seed = int(args.seed if args.seed is not None else cfg["seed"])
     seed_everything(seed, bool(cfg["deterministic"]))
 
     processed = Path(cfg["data"]["processed_dir"])
     parquet = processed / "sessions.parquet"
+    logger.info("data  samples=%s  batch=%d  workers=%d",
+                cfg["data"]["processed_dir"], cfg.get("batch_size","?"), cfg["data"]["num_workers"])
     vocabulary = json.loads((processed / "vocab.json").read_text(encoding="utf-8"))
     overrides = {
         f"{name}_vocab_size": len(vocabulary[name])
@@ -99,6 +109,7 @@ def main() -> None:
     model = build_model(cfg["model_config"], overrides).to(device)
     train_dataset = SessionDataset(str(parquet), "train")
     validation_dataset = SessionDataset(str(parquet), "validation")
+    logger.info("model  params=%d  train=%d  valid=%d", sum(p.numel() for p in model.parameters()), len(train_dataset), len(validation_dataset))
     output = Path(cfg["output_dir"]) / f"seed_{seed}"
     output.mkdir(parents=True, exist_ok=True)
 
@@ -112,7 +123,9 @@ def main() -> None:
     pretrain_result = None
     if not args.skip_pretrain and int(cfg.get("pretrain_epochs", 0)) > 0:
         protocol = args.pretrain_protocol or cfg.get("pretrain_protocol", "normal_only")
+        logger.info("pretrain  protocol=%s  epochs=%d  lr=%g", protocol, cfg["pretrain_epochs"], cfg["pretrain_learning_rate"])
         pretrain_dataset = LabelFilteredDataset(train_dataset, protocol)
+        logger.info("pretrain  samples=%d", len(pretrain_dataset))
         pretrain_loader = make_loader(pretrain_dataset, cfg, shuffle=True, seed=seed)
         projection = ProjectionHead(
             model.config.hidden_dim,
@@ -134,6 +147,7 @@ def main() -> None:
             protocol=protocol,
         )
         pretrain_result = pretrainer.fit(args.pretrain_resume)
+        logger.info("pretrain  done  best_loss=%.4f  epochs=%d", pretrain_result.best_loss, pretrain_result.epochs)
         (output / "pretrain_result.json").write_text(
             json.dumps(pretrain_result.__dict__, indent=2), encoding="utf-8"
         )
@@ -143,6 +157,7 @@ def main() -> None:
 
     labels = [int(l) for l in train_dataset.labels]
     counts = torch.tensor([labels.count(0), labels.count(1)])
+    logger.info("supervised  train=%d  normal=%d  anomaly=%d  ratio=%.4f", len(labels), labels.count(0), labels.count(1), labels.count(1)/max(len(labels),1))
     if (counts == 0).any():
         raise ValueError("supervised training split must contain both classes")
 
@@ -165,6 +180,7 @@ def main() -> None:
         device,
     )
     result = trainer.fit(args.resume)
+    logger.info("done  best_%s=%.4f  epochs=%d  threshold=%.4f", cfg["monitor"], result["best_metric"], result["epochs"], result["threshold"]["threshold"])
     result["pretraining"] = pretrain_result.__dict__ if pretrain_result else None
     (output / "result.json").write_text(
         json.dumps(result, indent=2), encoding="utf-8"

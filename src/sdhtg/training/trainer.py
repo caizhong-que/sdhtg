@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 from contextlib import nullcontext
 from pathlib import Path
 from tqdm import tqdm
@@ -15,6 +16,9 @@ from .checkpoint import CheckpointManager
 from .reproducibility import hash_state_dict
 
 
+logger = logging.getLogger("sdhtg.trainer")
+
+
 class Trainer:
     def __init__(self, model, criterion, optimizer, train_loader, validation_loader, config, output_dir, device):
         self.model=model; self.criterion=criterion; self.optimizer=optimizer
@@ -28,6 +32,8 @@ class Trainer:
     def _autocast(self): return torch.autocast(device_type="cuda",dtype=torch.float16) if self.amp else nullcontext()
 
     def train_epoch(self, epoch):
+        st = self.curriculum.at(epoch,self.config["max_epochs"])
+        logger.info("epoch %d start  temp=%.2f  film=%.2f", epoch, st.boundary_temperature, st.film_strength)
         self.model.train()
         state=self.curriculum.at(epoch,self.config["max_epochs"])
         totals=[]
@@ -47,11 +53,12 @@ class Trainer:
             if (index+1)%accumulation==0 or index+1==len(self.train_loader):
                 self.scaler.unscale_(self.optimizer)
                 nn.utils.clip_grad_norm_(self.model.parameters(),self.config["grad_clip_norm"])
-                self.scaler.step(self.optimizer); self.scaler.update()
-                self.optimizer.zero_grad(set_to_none=True)
-                self.global_step+=1
+            self.scaler.step(self.optimizer); self.scaler.update()
+            self.optimizer.zero_grad(set_to_none=True)
+            self.global_step+=1
             pbar.set_postfix(loss=f"{loss.item():.4f}")
             totals.append(float(loss.detach())*accumulation)
+        logger.info("epoch %d train  loss=%.4f  batches=%d", epoch, float(np.mean(totals)), len(self.train_loader))
         return {"loss":float(np.mean(totals)),"temperature":state.boundary_temperature,"film_strength":state.film_strength}
 
     @torch.inference_mode()
@@ -76,13 +83,18 @@ class Trainer:
             monitored=metrics[self.config["monitor"]]; improved=(monitored>self.best_metric+self.config["minimum_delta"] if self.config["monitor_mode"]=="max" else monitored<self.best_metric-self.config["minimum_delta"])
             if improved: self.best_metric=monitored; self.patience_count=0
             else: self.patience_count+=1
+            logger.info("epoch %d  trn=%.4f  val=%.4f  auprc=%.4f  auroc=%.4f%s",
+                        epoch, train["loss"], val_loss, metrics["auprc"], metrics["auroc"],
+                        " *" if improved else "")
             record={"epoch":epoch,"train":train,"validation":metrics}; history.append(record)
             metadata={"record":record,"model_sha256":hash_state_dict(self.model)}
             self.checkpoints.save("last",model=self.model,optimizer=self.optimizer,scheduler=None,scaler=self.scaler,epoch=epoch,global_step=self.global_step,best_metric=self.best_metric,patience_count=self.patience_count,metadata=metadata)
             if improved: self.checkpoints.save("best",model=self.model,optimizer=self.optimizer,scheduler=None,scaler=self.scaler,epoch=epoch,global_step=self.global_step,best_metric=self.best_metric,patience_count=0,metadata=metadata)
             (self.output_dir/"history.json").write_text(json.dumps(history,indent=2),encoding="utf-8")
-            if self.patience_count>=self.config["patience"]: break
+            if self.patience_count>=self.config["patience"]:
+                logger.info("early stopping  epoch=%d  best=%.4f", epoch, self.best_metric); break
         self.checkpoints.load(self.output_dir/"checkpoints/best.pt",model=self.model,map_location=self.device)
         y,s,_=self.predict(self.validation_loader); threshold=calibrate_threshold(y,s,**self.config["threshold"])
+        logger.info("calibrated  threshold=%.4f  f1=%.4f", threshold["threshold"], threshold.get("validation_value",0))
         (self.output_dir/"threshold.json").write_text(json.dumps(threshold,indent=2),encoding="utf-8")
         return {"best_metric":self.best_metric,"threshold":threshold,"epochs":len(history)}
