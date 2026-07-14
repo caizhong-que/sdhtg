@@ -33,7 +33,8 @@ class LabelFilteredDataset(torch.utils.data.Dataset):
         self.dataset = dataset
         self.protocol = protocol
         if protocol == "normal_only":
-            self.indices = [i for i, row in enumerate(dataset.rows) if int(row["label"]) == 0]
+            labels = dataset.labels
+            self.indices = [i for i in range(len(dataset)) if labels[i] == 0]
         else:
             self.indices = list(range(len(dataset)))
         if not self.indices:
@@ -44,7 +45,8 @@ class LabelFilteredDataset(torch.utils.data.Dataset):
 
     @property
     def lengths(self):
-        return [self.dataset.lengths[i] for i in self.indices]
+        all_lens = self.dataset.lengths
+        return [all_lens[i] for i in self.indices]
 
     def __getitem__(self, index):
         return self.dataset[self.indices[index]]

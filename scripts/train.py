@@ -141,7 +141,7 @@ def main() -> None:
     if args.pretrain_only:
         return
 
-    labels = [int(row["label"]) for row in train_dataset.rows]
+    labels = [int(l) for l in train_dataset.labels]
     counts = torch.tensor([labels.count(0), labels.count(1)])
     if (counts == 0).any():
         raise ValueError("supervised training split must contain both classes")
