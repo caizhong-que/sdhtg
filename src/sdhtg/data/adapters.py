@@ -75,6 +75,11 @@ class DatasetAdapter(ABC):
 
 class LineLabelAdapter(DatasetAdapter):
     """BGL and Thunderbird: official line label, native node/entity stream."""
+    JOB_UNIT_RE = re.compile(r":J\d+-U\d+$")
+    def entity(self, row):
+        e = super().entity(row)
+        return self.JOB_UNIT_RE.sub("", e)
+
     def normalize(self) -> pd.DataFrame:
         if not self.cfg.label_field:
             raise ValueError("line-labelled adapter requires label_field")
