@@ -34,7 +34,7 @@ class DatasetAdapter(ABC):
             raise ValueError(f"empty timestamp at source line {row.get('source_line')}")
         for fmt in self.cfg.timestamp_formats:
             try:
-                return pd.Timestamp.strptime(value, fmt).tz_localize("UTC")
+                return pd.to_datetime(value, format=fmt).tz_localize("UTC")
             except ValueError:
                 pass
         if re.fullmatch(r"\d+(?:\.\d+)?", value):
