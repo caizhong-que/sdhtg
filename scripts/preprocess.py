@@ -28,7 +28,7 @@ def main() -> None:
 
     events = create_adapter(cfg).normalize()
     events = assign_sessions(events, cfg)
-    events = temporal_session_split(events, cfg.split)
+    events = temporal_session_split(events, cfg.split, cfg.split_seed)
     drain_state = cfg.processed_dir / "drain_state.bin"
     events = fit_transform_drain(events, drain_state, cfg.drain)
     override = Path(args.semantic_overrides) if args.semantic_overrides else None

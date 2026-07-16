@@ -3,10 +3,14 @@ from __future__ import annotations
 import pandas as pd
 
 
-def temporal_session_split(events: pd.DataFrame, ratios=(0.6, 0.2, 0.2)) -> pd.DataFrame:
+def temporal_session_split(events: pd.DataFrame, ratios=(0.6, 0.2, 0.2), random_seed: int | None = None) -> pd.DataFrame:
     sessions = (events.groupby("session_id", sort=False)
                 .agg(start=("timestamp", "min"), end=("timestamp", "max"))
-                .sort_values(["start", "end"], kind="mergesort"))
+                .sort_values(["start", "end"], kind="mergesort")
+                if random_seed is None
+                else events.groupby("session_id", sort=False)
+                .agg(start=("timestamp", "min"), end=("timestamp", "max"))
+                .sample(frac=1, random_state=random_seed))
     count = len(sessions)
     if count < 3:
         raise ValueError("at least three sessions are required for train/validation/test")

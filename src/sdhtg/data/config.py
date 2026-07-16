@@ -41,6 +41,7 @@ class DataConfig:
     max_session_length: int = 512
     drain: dict[str, Any] = field(default_factory=dict)
     regex: dict[str, str] = field(default_factory=dict)
+    split_seed: int | None = None
 
     def file_by_role(self, role: str) -> FileSpec:
         matches = [x for x in self.files if x.role == role]
