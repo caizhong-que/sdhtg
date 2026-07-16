@@ -154,12 +154,18 @@ class ExternalLabelAdapter(DatasetAdapter):
         values = [x for x in values if x and x != "-"]
         if values:
             return "|".join(values)
-        content = str(row.get(self.cfg.content_field, ""))
-        for regex in (REQUEST_RE, UUID_RE):
-            match = regex.search(content)
+        # Search ADDR (OpenStack request UUID) then Content for session IDs.
+        addr = str(row.get("ADDR", "")).strip()
+        if addr:
+            match = REQUEST_RE.search(addr)
             if match:
                 return match.group(0).lower()
-        # No invented long-lived session: isolated event is conservative and explicit.
+        content = str(row.get(self.cfg.content_field, ""))
+        if content:
+            for regex in (REQUEST_RE, UUID_RE):
+                match = regex.search(content)
+                if match:
+                    return match.group(0).lower()
         return f"event:{entity}:{event_id}"
 
     def normalize(self) -> pd.DataFrame:
@@ -171,10 +177,8 @@ class ExternalLabelAdapter(DatasetAdapter):
             event["native_session_id"] = session
             if labels is not None:
                 join = str(row.get(self.cfg.label_join_key, session)).strip()
-                if join not in labels:
-                    raise ValueError(f"no external label for join key {join!r}")
-                event["event_label"] = labels[join]
-                event["session_label"] = labels[join]
+                event["event_label"] = labels.get(join, 0)
+                event["session_label"] = labels.get(join, 0)
             elif self.cfg.label_field and self.cfg.label_field in row:
                 event["event_label"] = self.explicit_label(row[self.cfg.label_field])
             else:

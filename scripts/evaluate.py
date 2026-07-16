@@ -3,6 +3,7 @@ import argparse, json
 from pathlib import Path
 import numpy as np
 import torch, yaml
+from tqdm import tqdm
 from sklearn.metrics import average_precision_score, roc_auc_score, precision_score, recall_score, f1_score
 from torch.utils.data import DataLoader, Sampler
 from sdhtg.data.collate import collate_sessions, move_batch_to_device
@@ -33,17 +34,19 @@ class BucketBatchSampler(Sampler):
 def main():
     p=argparse.ArgumentParser(); p.add_argument("--config",required=True)
     p.add_argument("--checkpoint",required=True); p.add_argument("--seed",type=int,default=42)
-    p.add_argument("--batch-size",type=int,default=256)
+    p.add_argument("--batch-size",type=int,default=2048)
     a=p.parse_args()
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    seed_everything(a.seed)
     cfg=yaml.safe_load(Path(a.config).read_text())
+    seed_everything(a.seed, bool(cfg.get("deterministic", True)))
     processed=Path(cfg["data"]["processed_dir"])
     vocab=json.loads((processed/"vocab.json").read_text())
     ov={f"{n}_vocab_size":len(vocab[n]) for n in ["template","entity","action","status"]}
     model=build_model(cfg["model_config"],ov).to(device).eval()
     ckpt=torch.load(a.checkpoint,map_location=device,weights_only=False)
-    model.load_state_dict(ckpt["model"])
+    sd=ckpt["model"]
+    if any(k.startswith("model.") for k in sd): sd={k[6:]:v for k,v in sd.items() if k.startswith("model.")}
+    model.load_state_dict(sd)
     print(f"Checkpoint loaded  epoch={ckpt.get('epoch','?')}")
     ds=SessionDataset(str(processed/"sessions.parquet"),"test")
     sampler=BucketBatchSampler(ds.lengths,a.batch_size)
@@ -51,12 +54,13 @@ def main():
                       num_workers=int(cfg["data"]["num_workers"]),pin_memory=True)
     print(f"Test samples: {len(ds)}  batches: {len(loader)}")
     y_true,y_score=[],[]
-    for batch in loader:
+    for batch in tqdm(loader, desc="Evaluating", unit="batch"):
         batch=move_batch_to_device(batch,device)
         with torch.inference_mode():
             out=model(batch)
         y_true.extend(batch["label"].cpu().tolist())
         y_score.extend(out.anomaly_probability.float().cpu().tolist())
+    print()
     y_true=np.asarray(y_true,dtype=int); y_score=np.asarray(y_score,dtype=float)
     auprc=float(average_precision_score(y_true,y_score))
     auroc=float(roc_auc_score(y_true,y_score)) if len(np.unique(y_true))>1 else 0.0

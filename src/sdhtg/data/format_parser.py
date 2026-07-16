@@ -32,6 +32,10 @@ class LogFormatParser:
         last = fields[-1]
         pattern = pattern.replace(fr"(?P<{last}>.*?)", fr"(?P<{last}>.*)", 1)
         self.regex = re.compile("^" + pattern + "$", re.ASCII)
+        # Fallback: simple split-based parser for lines missing ADDR (common in OpenStack compute logs)
+        self._fallback_fields = [f for f in self.fields if f != "ADDR"]
+        self._content_key = self.fields[-1]
+        self._has_addr = "ADDR" in self.fields
 
     @staticmethod
     def _literal_pattern(value: str) -> str:
@@ -48,10 +52,38 @@ class LogFormatParser:
         return {key: value.strip() for key, value in match.groupdict().items()}
 
     def parse_file(self, path: Path, encoding: str) -> Iterator[dict[str, str]]:
+        last = None
         with path.open("r", encoding=encoding, errors="strict") as stream:
             for number, line in enumerate(stream, 1):
-                if not line.strip():
+                stripped = line.rstrip("\n\r")
+                if not stripped:
+                    if last:
+                        last[last["_last_content_key"]] += "\n"
                     continue
-                row = self.parse_line(line, number)
-                row["source_line"] = number
-                yield row
+                try:
+                    row = self.parse_line(stripped, number)
+                    row["source_line"] = number
+                    row["_last_content_key"] = self._content_key
+                    if last:
+                        yield last
+                    last = row
+                except ValueError:
+                    if self._has_addr and "[" not in stripped:
+                        # Fallback: split by whitespace into known fields, add empty ADDR.
+                        parts = stripped.split(None, len(self._fallback_fields) - 1)
+                        if len(parts) >= len(self._fallback_fields):
+                            row = {"source_line": number, "_last_content_key": self._content_key}
+                            # Set known fields (excluding Content).
+                            for i, f in enumerate(self._fallback_fields[:-1]):
+                                row[f] = parts[i].strip()
+                            # Content is everything from the last known field onward.
+                            row[self._content_key] = " ".join(parts[len(self._fallback_fields) - 1:]).strip()
+                            row["ADDR"] = ""
+                            if last:
+                                yield last
+                            last = row
+                            continue
+                    if last:
+                        last[last["_last_content_key"]] += "\n" + stripped
+        if last:
+            yield last

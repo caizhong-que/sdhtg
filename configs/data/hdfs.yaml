@@ -4,7 +4,7 @@ raw_dir: data/raw/HDFS
 processed_dir: data/processed/hdfs
 files:
   - {path: HDFS.log, role: log, url: null, sha256: null}
-  - {path: anomaly_label.csv, role: labels, url: null, sha256: null}
+  - {path: preprocessed/anomaly_label.csv, role: labels, url: null, sha256: null}
 log_format: "<Date> <Time> <Pid> <Level> <Component>: <Content>"
 encoding: utf-8
 timestamp_fields: [Date, Time]

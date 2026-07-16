@@ -11,11 +11,11 @@ encoding: utf-8
 timestamp_fields: [Date, Time]
 timestamp_formats: ["%Y-%m-%d %H:%M:%S.%f"]
 entity_fields: [Component]
-session_fields: [Logrecord]
+session_fields: []
 content_field: Content
 label_field: Label
-label_join_key: Logrecord
-label_file_key: Logrecord
+label_join_key: _session
+label_file_key: req_id
 normal_labels: [Normal, normal, "0", "-"]
 anomaly_labels: [Anomaly, anomaly, "1"]
 sessionization: native
