@@ -136,6 +136,8 @@ class HDFSAdapter(DatasetAdapter):
 
 class ExternalLabelAdapter(DatasetAdapter):
     """OpenStack/SSH: explicit in-log labels or an external exact-key label table."""
+    # PID->IP cache for SSH: sshd[PID] uniquely maps to a client IP.
+    _pid_ip_cache: dict[str, str] = {}
     def load_external_labels(self) -> dict[str, int] | None:
         specs = [x for x in self.cfg.files if x.role == "labels"]
         if not specs:
@@ -166,11 +168,21 @@ class ExternalLabelAdapter(DatasetAdapter):
             if match:
                 return match.group(0).lower()
         content = str(row.get(self.cfg.content_field, ""))
-        if content:
-            for regex in (IP_RE, REQUEST_RE, UUID_RE):
-                match = regex.search(content)
-                if match:
-                    return match.group(0).lower()
+        if not content:
+            return f"event:{entity}:{event_id}"
+        pid = str(row.get("Pid", "")).strip()
+        ip_match = IP_RE.search(content)
+        if ip_match:
+            ip = ip_match.group(0).lower()
+            if pid:
+                self._pid_ip_cache[pid] = ip
+            return ip
+        if pid and pid in self._pid_ip_cache:
+            return self._pid_ip_cache[pid]
+        for regex in (REQUEST_RE, UUID_RE):
+            match = regex.search(content)
+            if match:
+                return match.group(0).lower()
         return f"event:{entity}:{event_id}"
 
     def normalize(self) -> pd.DataFrame:
