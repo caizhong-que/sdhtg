@@ -162,7 +162,7 @@ class ExternalLabelAdapter(DatasetAdapter):
                 return match.group(0).lower()
         content = str(row.get(self.cfg.content_field, ""))
         if content:
-            for regex in (REQUEST_RE, UUID_RE):
+            for regex in (IP_RE, REQUEST_RE, UUID_RE):
                 match = regex.search(content)
                 if match:
                     return match.group(0).lower()

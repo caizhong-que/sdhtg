@@ -5,16 +5,16 @@ processed_dir: data/processed/ssh
 files:
   - {path: SSH.log, role: log, url: null, sha256: null}
   - {path: labels.csv, role: labels, url: null, sha256: null}
-log_format: "<Date> <Time> <Host> <Component>[<Pid>]: <Content>"
+log_format: "<Month> <Day> <Time> <Host> <Component>[<Pid>]: <Content>"
 encoding: utf-8
-timestamp_fields: [Date, Time]
+timestamp_fields: [Month, Day, Time]
 timestamp_formats: ["%b %d %H:%M:%S"]
 entity_fields: [Host]
 session_fields: []
 content_field: Content
 label_field: Label
-label_join_key: SessionId
-label_file_key: SessionId
+label_join_key: __session__
+label_file_key: ip
 normal_labels: [Normal, normal, "0", "-"]
 anomaly_labels: [Anomaly, anomaly, "1"]
 sessionization: native
