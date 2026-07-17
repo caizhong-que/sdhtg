@@ -18,7 +18,9 @@ def rng_state() -> dict[str, Any]:
 
 
 def _as_byte(x):
-    return x if isinstance(x, torch.Tensor) and x.dtype == torch.uint8 else torch.as_tensor(x, dtype=torch.uint8, device='cpu')
+    if isinstance(x, torch.Tensor) and x.dtype == torch.uint8:
+        return x
+    return torch.as_tensor(x, dtype=torch.uint8)
 
 def restore_rng(state: dict[str, Any]) -> None:
     try:
