@@ -18,8 +18,8 @@ label_join_key: _session
 label_file_key: req_id
 normal_labels: [Normal, normal, "0", "-"]
 anomaly_labels: [Anomaly, anomaly, "1"]
-sessionization: native
-split: [0.85, 0.1, 0.05]
-split_seed: 42
+sessionization: fixed_window
+fixed_window_size: 100
+split: [0.7, 0.1, 0.2]
 max_session_length: 512
 drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

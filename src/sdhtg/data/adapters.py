@@ -195,7 +195,6 @@ class ExternalLabelAdapter(DatasetAdapter):
             if labels is not None:
                 join = str(row.get(self.cfg.label_join_key, session)).strip()
                 event["event_label"] = labels.get(join, 0)
-                event["session_label"] = labels.get(join, 0)
             elif self.cfg.label_field and self.cfg.label_field in row:
                 event["event_label"] = self.explicit_label(row[self.cfg.label_field])
             else:

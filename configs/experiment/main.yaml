@@ -1,5 +1,5 @@
 data:
-  processed_dir: data/processed/hdfs
+  processed_dir: data/processed/openstack
   train_split: train
   validation_split: validation
   test_split: test
@@ -7,7 +7,7 @@ data:
   pin_memory: true
 
 model_config: configs/model/sdhtg.yaml
-output_dir: outputs/hdfs/main
+output_dir: outputs/openstack/main
 seed: 42
 seeds: [42, 123, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
 

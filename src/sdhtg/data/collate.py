@@ -70,11 +70,11 @@ def collate_sessions(rows: list[dict[str, Any]]) -> dict[str, Any]:
         for field in SEQUENCE_LONG_FIELDS:
             long_tensors[field][batch_index, :length] = torch.as_tensor(
                 row[field], dtype=torch.long
-            )
+            ).clone()
         for field in SEQUENCE_FLOAT_FIELDS:
             float_tensors[field][batch_index, :length] = torch.as_tensor(
                 row[field], dtype=torch.float32
-            )
+            ).clone()
 
     # Public names used by SDHTG.forward.
     batch = {
