@@ -25,6 +25,7 @@ class SDHTGOutput:
     level_weights: Tensor
     graph_embedding: Tensor
     prototype_distance: Tensor
+    prototype_distances: Tensor
     nearest_prototype: Tensor
     prototype_diversity: Tensor
 
@@ -146,6 +147,7 @@ class SDHTG(nn.Module):
                 level_weights=detector_output.level_weights,
                 graph_embedding=detector_output.graph_embedding,
                 prototype_distance=detector_output.prototype_distance,
+                prototype_distances=detector_output.prototype_distances,
                 nearest_prototype=detector_output.nearest_prototype,
                 prototype_diversity=detector_output.prototype_diversity,
                 action_boundary=zero_boundary,
@@ -210,6 +212,7 @@ class SDHTG(nn.Module):
             level_weights=detector_output.level_weights,
             graph_embedding=detector_output.graph_embedding,
             prototype_distance=detector_output.prototype_distance,
+            prototype_distances=detector_output.prototype_distances,
             nearest_prototype=detector_output.nearest_prototype,
             prototype_diversity=detector_output.prototype_diversity,
             action_boundary=boundary_output.action_probability,
