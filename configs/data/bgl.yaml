@@ -17,5 +17,6 @@ anomaly_labels: []
 sessionization: adaptive_idle_gap
 adaptive_idle_multiplier: 2.0
 split: [0.6, 0.2, 0.2]
+split_seed: 42
 max_session_length: 512
 drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

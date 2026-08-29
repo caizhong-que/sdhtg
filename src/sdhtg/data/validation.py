@@ -13,7 +13,11 @@ REQUIRED_EVENT_COLUMNS = {
 }
 
 
-def validate_processed(events: pd.DataFrame, sessions: pd.DataFrame) -> dict:
+def validate_processed(
+    events: pd.DataFrame,
+    sessions: pd.DataFrame,
+    vocabs: dict | None = None,
+) -> dict:
     missing = REQUIRED_EVENT_COLUMNS - set(events.columns)
     if missing:
         raise ValueError(f"event cache missing columns: {sorted(missing)}")
@@ -38,12 +42,25 @@ def validate_processed(events: pd.DataFrame, sessions: pd.DataFrame) -> dict:
         s = sessions[sessions.split == split]
         if e.empty or s.empty:
             raise ValueError(f"empty required split: {split}")
-        split_stats[split] = {
+        entry = {
             "events": int(len(e)), "sessions": int(len(s)),
             "anomalous_events": int(e.event_label.sum()),
             "anomalous_sessions": int(s.label.sum()),
             "unseen_template_rate": float(e.unseen_template.mean()),
         }
+        if vocabs is not None:
+            entry.update(
+                unseen_entity_rate=float(
+                    (~e.entity_sem.astype(str).isin(vocabs["entity"])).mean()
+                ),
+                unseen_action_rate=float(
+                    (~e.action_sem.astype(str).isin(vocabs["action"])).mean()
+                ),
+                unseen_status_rate=float(
+                    (~e.status_sem.astype(str).isin(vocabs["status"])).mean()
+                ),
+            )
+        split_stats[split] = entry
     return {
         "events": int(len(events)), "sessions": int(len(sessions)),
         "templates": int(events.drain_cluster_id.nunique()),

@@ -1,0 +1,21 @@
+name: bgl
+adapter: bgl
+raw_dir: data/raw/BGL
+processed_dir: data/processed/bgl_602020
+files:
+  - {path: BGL.log, role: log, url: "https://zenodo.org/records/8196385/files/BGL.zip?download=1", sha256: "666130b15ef44eb32fd02bd053e6c6e007c37696b5e7e8b9d8e45b729876a5d2"}
+log_format: "<Label> <Timestamp> <Date> <Node> <Time> <NodeRepeat> <Component> <Level> <Content>"
+encoding: utf-8
+timestamp_fields: [Timestamp]
+timestamp_formats: []
+entity_fields: [Node]
+session_fields: []
+content_field: Content
+label_field: Label
+normal_labels: ["-"]
+anomaly_labels: []
+sessionization: adaptive_idle_gap
+adaptive_idle_multiplier: 2.0
+split: [0.6, 0.2, 0.2]
+max_session_length: 512
+drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

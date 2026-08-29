@@ -1,0 +1,7 @@
+model:
+  template_vocab_size: 4096
+  entity_vocab_size: 1024
+  action_vocab_size: 1024
+  status_vocab_size: 4096
+  ablation:
+    use_status_source: false

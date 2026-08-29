@@ -76,7 +76,52 @@ def make_loader(dataset, cfg, *, shuffle: bool, seed: int):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
+    parser.add_argument(
+        "--model-config",
+        default=None,
+        help="override model configuration path from the experiment config",
+    )
     parser.add_argument("--seed", type=int)
+    parser.add_argument("--max-epochs", type=int, default=None)
+    parser.add_argument("--pretrain-epochs", type=int, default=None)
+    parser.add_argument("--mask-template-prob", type=float, default=None)
+    parser.add_argument(
+        "--loss-type",
+        choices=("bce", "weighted_bce", "focal", "cb_focal"),
+        default=None,
+        help="override loss.classification_type",
+    )
+    parser.add_argument(
+        "--prototype-diversity",
+        action="store_true",
+        help="enable prototype diversity/equilibrium regularization",
+    )
+    parser.add_argument(
+        "--negative-strategy",
+        choices=("random", "hard", "semi_hard", "semantic", "none", "supervised"),
+        default=None,
+        help="negative sampling strategy for contrastive pretraining",
+    )
+    parser.add_argument(
+        "--shuffle-entity-id",
+        action="store_true",
+        help="shuffle entity IDs (keep PAD/UNK and frequency distribution)",
+    )
+    parser.add_argument(
+        "--entity-unk",
+        action="store_true",
+        help="map every entity ID to UNK during evaluation",
+    )
+    parser.add_argument(
+        "--mask-status-words",
+        action="store_true",
+        help="map explicit anomaly status words to UNK",
+    )
+    parser.add_argument(
+        "--tag",
+        default=None,
+        help="optional sub-directory under output_dir, e.g. --tag struct_base",
+    )
     parser.add_argument("--resume", help="supervised checkpoint")
     parser.add_argument("--pretrain-resume")
     parser.add_argument(
@@ -90,6 +135,26 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    if args.max_epochs is not None:
+        cfg["max_epochs"] = args.max_epochs
+    if args.pretrain_epochs is not None:
+        cfg["pretrain_epochs"] = args.pretrain_epochs
+    if args.mask_template_prob is not None:
+        cfg["mask_template_prob"] = args.mask_template_prob
+    if args.model_config:
+        cfg["model_config"] = args.model_config
+    if args.loss_type:
+        cfg.setdefault("loss", {})["loss_type"] = args.loss_type
+    if args.prototype_diversity:
+        cfg.setdefault("loss", {})["use_prototype_diversity"] = True
+    if args.negative_strategy:
+        cfg.setdefault("contrastive", {})["negative_strategy"] = args.negative_strategy
+    if args.shuffle_entity_id:
+        cfg["entity_id_shuffle"] = True
+    if args.entity_unk:
+        cfg["entity_to_unk"] = True
+    if args.mask_status_words:
+        cfg["mask_explicit_status_words"] = True
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     logger.info("started  seed=%d  device=%s", int(args.seed if args.seed is not None else cfg["seed"]), device.type)
@@ -102,6 +167,8 @@ def main() -> None:
     logger.info("data  samples=%s  batch=%d  workers=%d",
                 cfg["data"]["processed_dir"], cfg.get("batch_size","?"), cfg["data"]["num_workers"])
     vocabulary = json.loads((processed / "vocab.json").read_text(encoding="utf-8"))
+    from sdhtg.data.shortcuts import status_word_mask_from_vocab
+    status_word_mask = status_word_mask_from_vocab(vocabulary["status"])
     overrides = {
         f"{name}_vocab_size": len(vocabulary[name])
         for name in ("template", "entity", "action", "status")
@@ -120,8 +187,12 @@ def main() -> None:
 
     train_dataset = SessionDataset(str(parquet), "train")
     validation_dataset = SessionDataset(str(parquet), "validation")
+    test_dataset = SessionDataset(str(parquet), "test")
     logger.info("model  params=%d  train=%d  valid=%d", sum(p.numel() for p in model.parameters()), len(train_dataset), len(validation_dataset))
-    output = Path(cfg["output_dir"]) / f"seed_{seed}"
+    output = Path(cfg["output_dir"])
+    if args.tag:
+        output = output / args.tag
+    output = output / f"seed_{seed}"
     output.mkdir(parents=True, exist_ok=True)
 
     write_training_manifest(
@@ -174,7 +245,8 @@ def main() -> None:
 
     train_loader = make_loader(train_dataset, cfg, shuffle=True, seed=seed + 1)
     validation_loader = make_loader(validation_dataset, cfg, shuffle=False, seed=seed)
-    criterion = CompositeLoss(cfg["loss"], counts).to(device)
+    test_loader = make_loader(test_dataset, cfg, shuffle=False, seed=seed)
+    criterion = CompositeLoss(cfg["loss"], counts, ablation_config=model.config.ablation).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=float(cfg["learning_rate"]),
@@ -189,6 +261,9 @@ def main() -> None:
         cfg,
         output,
         device,
+        test_loader=test_loader,
+        entity_vocab_size=len(vocabulary["entity"]),
+        status_word_mask=status_word_mask,
     )
     result = trainer.fit(args.resume)
     logger.info("done  best_%s=%.4f  epochs=%d  threshold=%.4f", cfg["monitor"], result["best_metric"], result["epochs"], result["threshold"]["threshold"])

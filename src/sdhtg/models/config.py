@@ -11,6 +11,12 @@ class BoundaryConfig:
     minimum_temperature: float = 0.05
     prior_logit_scale: float = 1.0
     force_first_boundary: bool = True
+    action_prior_scale: float | None = None
+    entity_prior_scale: float | None = None
+    mode: str = "learned"
+    fixed_window_size: int = 16
+    random_boundary_prob: float = 0.1
+    hard_change_source: str = "action"
 
     def validate(self) -> None:
         if self.initial_temperature <= 0:
@@ -19,12 +25,31 @@ class BoundaryConfig:
             raise ValueError("final_temperature must be positive")
         if self.minimum_temperature <= 0:
             raise ValueError("minimum_temperature must be positive")
+        if self.mode not in {"learned", "fixed_window", "random", "hard_change"}:
+            raise ValueError(
+                f"boundary.mode must be learned/fixed_window/random/hard_change, "
+                f"got {self.mode!r}"
+            )
+        if self.fixed_window_size <= 0:
+            raise ValueError("fixed_window_size must be positive")
+        if not 0 <= self.random_boundary_prob <= 1:
+            raise ValueError("random_boundary_prob must be in [0, 1]")
+        if self.hard_change_source not in {"action", "entity"}:
+            raise ValueError(
+                f"hard_change_source must be action/entity, got {self.hard_change_source!r}"
+            )
+        for name in ("action_prior_scale", "entity_prior_scale"):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                raise ValueError(f"{name} must be non-negative or None")
 
 
 @dataclass(frozen=True)
 class HierarchyConfig:
     membership_epsilon: float = 1e-6
     minimum_node_mass: float = 1e-5
+    edge_minimum_weight: float = 1e-6
+    max_edges_per_target: int = 10
     normalize_membership: bool = True
 
     def validate(self) -> None:
@@ -32,6 +57,10 @@ class HierarchyConfig:
             raise ValueError("membership_epsilon must be positive")
         if self.minimum_node_mass < 0:
             raise ValueError("minimum_node_mass must be non-negative")
+        if self.edge_minimum_weight < 0:
+            raise ValueError("edge_minimum_weight must be non-negative")
+        if self.max_edges_per_target < 0:
+            raise ValueError("max_edges_per_target must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -41,16 +70,18 @@ class AblationConfig:
     use_action_source: bool = True
     use_status_source: bool = True
     use_time_source: bool = True
+    use_hierarchy: bool = True
     use_strategy_film: bool = True
     use_action_boundary: bool = True
     use_entity_boundary: bool = True
-    use_learned_containment: bool = True
     use_temporal_edges: bool = True
     use_semantic_edges: bool = True
     use_cross_level_messages: bool = True
     use_prototypes: bool = True
     detach_boundary_from_graph: bool = False
     single_boundary: bool = False
+    independent_boundaries: bool = False
+    hard_edge_weight: bool = False
 
 
 @dataclass(frozen=True)
@@ -80,6 +111,7 @@ class SDHTGModelConfig:
 
     num_normal_prototypes: int = 8
     prototype_temperature: float = 0.1
+    prototype_similarity_threshold: float = 0.2
     detector_pool_temperature: float = 0.2
 
     local_temporal_radius: Mapping[str, int] = field(

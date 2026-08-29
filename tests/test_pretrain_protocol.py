@@ -4,6 +4,9 @@ from sdhtg.training.pretrain import LabelFilteredDataset
 class Dataset:
     def __init__(self):
         self.rows = [{"label": 0}, {"label": 1}, {"label": 0}]
+    @property
+    def labels(self):
+        return [row["label"] for row in self.rows]
     def __len__(self):
         return len(self.rows)
     def __getitem__(self, index):

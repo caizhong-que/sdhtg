@@ -8,13 +8,13 @@ from torch import Tensor, nn
 
 from .boundaries import BoundaryOutput, NestedSoftBoundaryNetwork
 from .config import SDHTGModelConfig
-from .detector import DetectorOutput, HierarchicalAnomalyDetector
+from .detector import DetectorOutput, FlatGRUDetector, HierarchicalAnomalyDetector
 from .event_encoder import EventEncoderOutput, MultiSourceEventEncoder
 from .graph import GraphEncoderOutput, HeterogeneousTemporalGraphEncoder
 from .graph_builder_batched import GraphBuildResult, HeterogeneousGraphBuilder
 from .hierarchy import DifferentiableHierarchy, HierarchyOutput
 from .strategy import CausalStrategyFiLM, StrategyOutput
-from .utils import assert_finite, validate_sequence_batch
+from .utils import assert_finite, masked_mean, validate_sequence_batch
 
 
 @dataclass
@@ -26,6 +26,7 @@ class SDHTGOutput:
     graph_embedding: Tensor
     prototype_distance: Tensor
     nearest_prototype: Tensor
+    prototype_diversity: Tensor
 
     action_boundary: Tensor
     entity_boundary: Tensor
@@ -84,6 +85,11 @@ class SDHTG(nn.Module):
         self.graph_builder = HeterogeneousGraphBuilder(config)
         self.graph_encoder = HeterogeneousTemporalGraphEncoder(config)
         self.detector = HierarchicalAnomalyDetector(config)
+        self.flat_detector = (
+            FlatGRUDetector(config)
+            if not config.ablation.use_hierarchy
+            else None
+        )
 
     def forward(
         self,
@@ -109,6 +115,56 @@ class SDHTG(nn.Module):
             strength=film_strength,
             enabled=self.config.ablation.use_strategy_film,
         )
+
+        if not self.config.ablation.use_hierarchy:
+            pooled = masked_mean(
+                strategy_output.modulated, batch["mask"], dim=1
+            )
+            detector_output = self.flat_detector(
+                pooled, strategy_output.sequence_strategy
+            )
+            batch_size, steps = batch["mask"].shape
+            device = strategy_output.modulated.device
+            dtype = strategy_output.modulated.dtype
+            zero_boundary = torch.zeros(
+                batch_size, steps, device=device, dtype=dtype
+            )
+            empty_matrix = torch.zeros(
+                batch_size, steps, 0, device=device, dtype=dtype
+            )
+            assert_finite(
+                (
+                    detector_output.anomaly_logit,
+                    detector_output.graph_embedding,
+                ),
+                context="SDHTG forward (flat GRU)",
+            )
+            return SDHTGOutput(
+                anomaly_logit=detector_output.anomaly_logit,
+                anomaly_probability=detector_output.anomaly_probability,
+                level_logits=detector_output.level_logits,
+                level_weights=detector_output.level_weights,
+                graph_embedding=detector_output.graph_embedding,
+                prototype_distance=detector_output.prototype_distance,
+                nearest_prototype=detector_output.nearest_prototype,
+                prototype_diversity=detector_output.prototype_diversity,
+                action_boundary=zero_boundary,
+                entity_boundary=zero_boundary,
+                action_boundary_logit=zero_boundary,
+                entity_conditional_logit=zero_boundary,
+                event_encoding=event_output.encoded,
+                modulated_event_encoding=strategy_output.modulated,
+                source_gate=event_output.source_gate,
+                event_strategy=strategy_output.per_event_strategy,
+                sequence_strategy=strategy_output.sequence_strategy,
+                status_to_action=empty_matrix,
+                action_to_entity=empty_matrix,
+                status_node_mask=batch["mask"],
+                action_node_mask=torch.zeros_like(batch["mask"]),
+                entity_node_mask=torch.zeros_like(batch["mask"]),
+                graph_batch=None,
+            )
+
         boundary_output: BoundaryOutput = self.boundary_network(
             encoded=strategy_output.modulated,
             strategy=strategy_output.per_event_strategy,
@@ -155,6 +211,7 @@ class SDHTG(nn.Module):
             graph_embedding=detector_output.graph_embedding,
             prototype_distance=detector_output.prototype_distance,
             nearest_prototype=detector_output.nearest_prototype,
+            prototype_diversity=detector_output.prototype_diversity,
             action_boundary=boundary_output.action_probability,
             entity_boundary=boundary_output.entity_probability,
             action_boundary_logit=boundary_output.action_logit,
@@ -182,6 +239,8 @@ class SDHTG(nn.Module):
             "graph_encoder": self.graph_encoder,
             "detector": self.detector,
         }
+        if self.flat_detector is not None:
+            modules["flat_detector"] = self.flat_detector
         report = {
             name: sum(parameter.numel() for parameter in module.parameters())
             for name, module in modules.items()

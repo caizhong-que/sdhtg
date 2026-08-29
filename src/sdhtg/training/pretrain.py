@@ -65,10 +65,8 @@ def augment_batch(batch: dict[str, Any], config: dict[str, Any]) -> dict[str, An
     probability = float(config["token_mask_probability"])
     token_mask = (torch.rand_like(result["delta_t"]) < probability) & mask
 
-    # Fully mask template_id during pre-training so the model generalises
-    # via entity/action/status/time rather than memorising template IDs.
-    result["template_id"] = result["template_id"].masked_fill(mask, 1)
-    for key in ("action_id", "status_id"):
+    # Random UNK replacement for template/action/status (manuscript 4.10.4).
+    for key in ("template_id", "action_id", "status_id"):
         result[key] = result[key].masked_fill(token_mask, 1)
 
     jitter = torch.randn_like(result["delta_t"]) * float(config["time_jitter_std"])
@@ -127,6 +125,21 @@ class ContrastivePretrainer:
         pbar = tqdm(self.loader, desc=f"Epoch {epoch}", unit="batch")
         for batch in pbar:
             batch = move_batch_to_device(batch, self.device)
+            strategy = self.config["contrastive"].get("negative_strategy", "hard")
+            semantic_keys = None
+            if strategy == "semantic":
+                # PAD (0) and UNK (1) are shared by every padded row; they
+                # must not count as semantic overlap or every candidate would
+                # be excluded from the negative set.
+                template_sets = [
+                    set(int(x) for x in row.tolist() if x > 1)
+                    for row in batch["template_id"]
+                ]
+                entity_sets = [
+                    set(int(x) for x in row.tolist() if x > 1)
+                    for row in batch["entity_id"]
+                ]
+                semantic_keys = list(zip(template_sets, entity_sets))
             first = augment_batch(batch, self.config["contrastive"])
             second = augment_batch(batch, self.config["contrastive"])
             self.optimizer.zero_grad(set_to_none=True)
@@ -152,9 +165,11 @@ class ContrastivePretrainer:
                 loss = supervised_info_nce(
                     first_z,
                     second_z,
-                    labels=None,
+                    labels=batch["label"] if strategy == "supervised" else None,
                     temperature=float(self.config["contrastive"]["temperature"]),
                     hard_negative_k=int(self.config["contrastive"]["hard_negative_k"]),
+                    negative_strategy=strategy,
+                    semantic_keys=semantic_keys,
                 )
 
             self.scaler.scale(loss).backward()

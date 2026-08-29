@@ -6,6 +6,7 @@ import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import MessagePassing
+from torch_geometric.utils import scatter
 
 from .config import SDHTGModelConfig
 
@@ -64,12 +65,23 @@ class WeightedRelationConvolution(MessagePassing):
     ) -> Tensor:
         if edge_index.numel() == 0:
             return torch.zeros_like(target)
-        return self.propagate(
+        messages = self.propagate(
             edge_index=edge_index,
             x=(source, target),
             edge_attr=edge_attr,
             size=(source.shape[0], target.shape[0]),
         )
+        # Relation-wise weighted normalization (manuscript Eq. 44):
+        # m_i = sum_j w_ji m_{j->i} / (sum_j w_ji + eps).
+        structural_weight = edge_attr[:, :1].clamp_min(0.0)
+        weight_sum = scatter(
+            structural_weight,
+            edge_index[1],
+            dim=0,
+            dim_size=target.shape[0],
+            reduce="sum",
+        )
+        return messages / weight_sum.clamp_min(1e-8)
 
     def message(self, x_j: Tensor, edge_attr: Tensor) -> Tensor:
         structural_weight = edge_attr[:, :1].clamp_min(0.0)

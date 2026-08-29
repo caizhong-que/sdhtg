@@ -72,39 +72,42 @@ def semantic_edges(
     device = semantic_ids.device
     dtype = positions.dtype
 
-    groups: dict[int, list[int]] = {}
-    for idx in range(count):
-        sid = int(semantic_ids[idx].item())
-        if sid > 1:
-            groups.setdefault(sid, []).append(idx)
-
-    if not groups:
+    if count < 2:
         return _empty_edge_index(device), _empty_edge_attr(device, dtype)
 
-    src_list, tgt_list, w_list, d_list = [], [], [], []
+    valid_mask = semantic_ids > 1
+    if not valid_mask.any():
+        return _empty_edge_index(device), _empty_edge_attr(device, dtype)
+    valid_idx = torch.nonzero(valid_mask, as_tuple=False).squeeze(1)
+    order = torch.argsort(semantic_ids[valid_idx], stable=True)
+    sid_sorted = semantic_ids[valid_idx][order]
+    pos_sorted = positions[valid_idx][order]
+    valid_sorted = valid_idx[order]
+    _, counts = torch.unique_consecutive(sid_sorted, return_counts=True)
 
-    for identifier, group in groups.items():
-        m = len(group)
+    src_list, tgt_list, w_list, d_list = [], [], [], []
+    start = 0
+    for m in counts.tolist():
         if m < 2:
+            start += m
             continue
 
-        # GPU distance matrix: [m, m], no .item() sync
-        pos_g = positions[group].unsqueeze(1)                # [m, 1]
-        dist = (pos_g - pos_g.T).abs()                       # [m, m]
+        p = pos_sorted[start:start + m]
+        dist = (p.unsqueeze(1) - p.unsqueeze(0)).abs()
         dist.fill_diagonal_(float('inf'))
 
-        k = min(maximum_neighbors, m - 1)
-        topk_val, topk_idx = dist.topk(k, dim=1, largest=False)  # [m, k]
+        k = min(int(maximum_neighbors), m - 1)
+        topk_val, topk_idx = dist.topk(k, dim=1, largest=False)
 
-        # Vectorised edge construction: no Python inner loops
-        grp = torch.tensor(group, device=device)             # [m]
-        src_idx = grp.unsqueeze(1).expand(-1, k).reshape(-1) # [m*k]
-        tgt_idx = grp[topk_idx.reshape(-1)]                  # [m*k]
+        local_src = torch.arange(m, device=device).unsqueeze(1).expand(-1, k).reshape(-1)
+        src_idx = valid_sorted[start:start + m][local_src]
+        tgt_idx = valid_sorted[start:start + m][topk_idx.reshape(-1)]
 
         src_list.append(src_idx)
         tgt_list.append(tgt_idx)
         w_list.append((1.0 / (1.0 + topk_val)).reshape(-1))
         d_list.append(topk_val.reshape(-1))
+        start += m
 
     if not src_list:
         return _empty_edge_index(device), _empty_edge_attr(device, dtype)
@@ -122,6 +125,8 @@ def containment_edges(
     source_positions: Tensor,
     target_positions: Tensor,
     minimum_weight: float,
+    hard_edge_weight: bool = False,
+    maximum_per_target: int = 0,
 ) -> tuple[Tensor, Tensor]:
     """
     membership has shape [source candidates, target candidates].
@@ -139,7 +144,34 @@ def containment_edges(
 
     source = indices[:, 0]
     target = indices[:, 1]
-    selected = weights[source, target]
+    if maximum_per_target > 0:
+        selected_weights = weights[source, target]
+        first = torch.argsort(target, stable=True)
+        source = source[first]; target = target[first]
+        selected_weights = selected_weights[first]
+        second = torch.argsort(selected_weights, descending=True, stable=True)
+        source = source[second]; target = target[second]
+        third = torch.argsort(target, stable=True)
+        source = source[third]; target = target[third]
+        unique_targets, counts = torch.unique_consecutive(
+            target, return_counts=True
+        )
+        starts = torch.zeros_like(counts)
+        starts[1:] = torch.cumsum(counts[:-1], dim=0)
+        group_index = torch.searchsorted(unique_targets, target)
+        position = (
+            torch.arange(target.numel(), device=target.device)
+            - starts[group_index]
+        )
+        keep = position < maximum_per_target
+        source = source[keep]; target = target[keep]
+        if source.numel() == 0:
+            return _empty_edge_index(device), _empty_edge_attr(device, dtype)
+    selected = (
+        torch.ones_like(weights[source, target])
+        if hard_edge_weight
+        else weights[source, target]
+    )
     delta = (
         source_positions[source] - target_positions[target]
     ).abs()
@@ -272,7 +304,8 @@ class HeterogeneousGraphBuilder:
                 graph, "entity", hierarchy.entity, batch_index, entity_count
             )
 
-            minimum = self.config.hierarchy.minimum_node_mass
+            minimum = self.config.hierarchy.edge_minimum_weight
+            maximum_per_target = self.config.hierarchy.max_edges_per_target
             status_action_index, status_action_attr = containment_edges(
                 hierarchy.status_to_action[batch_index],
                 status_count,
@@ -280,6 +313,8 @@ class HeterogeneousGraphBuilder:
                 hierarchy.status.positions[batch_index, :status_count],
                 hierarchy.action.positions[batch_index, :action_count],
                 minimum,
+                self.config.ablation.hard_edge_weight,
+                maximum_per_target,
             )
             action_entity_index, action_entity_attr = containment_edges(
                 hierarchy.action_to_entity[batch_index],
@@ -288,6 +323,8 @@ class HeterogeneousGraphBuilder:
                 hierarchy.action.positions[batch_index, :action_count],
                 hierarchy.entity.positions[batch_index, :entity_count],
                 minimum,
+                self.config.ablation.hard_edge_weight,
+                maximum_per_target,
             )
 
             if (

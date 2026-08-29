@@ -7,7 +7,8 @@ def test_vocab_fits_train_only_and_unknown_maps_to_unk():
       "split":["train","validation","test"], "template":["a","new","a"],
       "entity_sem":["e","e","e"], "action_sem":["x","x","x"],
       "status_sem":["s","s","s"], "session_id":["1","2","3"],
-      "session_label":[0,0,1], "timestamp":pd.to_datetime([1,2,3],unit="s",utc=True),
+      "event_label":[0,0,1], "session_label":[0,0,1],
+      "timestamp":pd.to_datetime([1,2,3],unit="s",utc=True),
       "source_event_id":[1,2,3]
     })
     vocab=build_vocabs(frame)

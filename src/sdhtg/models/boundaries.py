@@ -57,6 +57,43 @@ class NestedSoftBoundaryNetwork(nn.Module):
         initial = torch.zeros_like(values[:, :1])
         return torch.cat((initial, values[:, :-1]), dim=1)
 
+    @staticmethod
+    def _rule_boundary(
+        config: SDHTGModelConfig,
+        action_change: Tensor,
+        entity_change: Tensor,
+        mask: Tensor,
+    ) -> Tensor:
+        """Deterministic hard boundary tensor for non-learned modes."""
+        boundary_cfg = config.boundary
+        dtype = action_change.dtype
+        device = action_change.device
+        if boundary_cfg.mode == "fixed_window":
+            positions = torch.arange(action_change.shape[1], device=device)
+            boundary = (positions % boundary_cfg.fixed_window_size == 0).to(dtype)
+            boundary = boundary.unsqueeze(0).expand_as(action_change)
+        elif boundary_cfg.mode == "random":
+            boundary = (
+                torch.rand_like(action_change) < boundary_cfg.random_boundary_prob
+            ).to(dtype)
+        elif boundary_cfg.mode == "hard_change":
+            source = (
+                entity_change
+                if boundary_cfg.hard_change_source == "entity"
+                else action_change
+            )
+            boundary = source.to(dtype)
+        else:
+            raise ValueError(
+                f"boundary.mode must be learned/fixed_window/random/hard_change, "
+                f"got {boundary_cfg.mode!r}"
+            )
+        boundary = boundary * mask.to(dtype)
+        if boundary_cfg.force_first_boundary:
+            first = mask[:, :1].to(dtype)
+            boundary = torch.cat((first, boundary[:, 1:]), dim=1)
+        return boundary
+
     def forward(
         self,
         encoded: Tensor,
@@ -88,11 +125,21 @@ class NestedSoftBoundaryNetwork(nn.Module):
         action_logit = self.action_head(features)
         entity_conditional_logit = self.entity_head(features)
 
-        prior_scale = self.config.boundary.prior_logit_scale
-        action_logit = action_logit + prior_scale * (
+        boundary_cfg = self.config.boundary
+        action_prior_scale = (
+            boundary_cfg.prior_logit_scale
+            if boundary_cfg.action_prior_scale is None
+            else boundary_cfg.action_prior_scale
+        )
+        entity_prior_scale = (
+            boundary_cfg.prior_logit_scale
+            if boundary_cfg.entity_prior_scale is None
+            else boundary_cfg.entity_prior_scale
+        )
+        action_logit = action_logit + action_prior_scale * (
             action_change.to(action_logit.dtype) - 0.5
         )
-        entity_conditional_logit = entity_conditional_logit + prior_scale * (
+        entity_conditional_logit = entity_conditional_logit + entity_prior_scale * (
             entity_change.to(entity_conditional_logit.dtype) - 0.5
         )
 
@@ -102,17 +149,37 @@ class NestedSoftBoundaryNetwork(nn.Module):
         )
 
         ablation = self.config.ablation
-        if not ablation.use_action_boundary:
-            action_probability = action_change.to(action_probability.dtype)
-        if ablation.single_boundary:
-            entity_probability = action_probability
-        elif not ablation.use_entity_boundary:
-            entity_probability = entity_change.to(action_probability.dtype)
-            entity_probability = torch.minimum(
-                entity_probability, action_probability
+        mode = self.config.boundary.mode
+        if mode != "learned":
+            action_probability = self._rule_boundary(
+                self.config, action_change, entity_change, mask
             )
+            entity_probability = self._rule_boundary(
+                self.config, action_change, entity_change, mask
+            )
+        elif not ablation.use_action_boundary:
+            action_probability = action_change.to(action_probability.dtype)
+            if ablation.single_boundary:
+                entity_probability = action_probability
+            elif not ablation.use_entity_boundary:
+                entity_probability = entity_change.to(action_probability.dtype)
+                entity_probability = torch.minimum(
+                    entity_probability, action_probability
+                )
+            else:
+                entity_probability = action_probability * conditional_entity
         else:
-            entity_probability = action_probability * conditional_entity
+            if ablation.single_boundary:
+                entity_probability = action_probability
+            elif ablation.independent_boundaries:
+                entity_probability = conditional_entity
+            elif not ablation.use_entity_boundary:
+                entity_probability = entity_change.to(action_probability.dtype)
+                entity_probability = torch.minimum(
+                    entity_probability, action_probability
+                )
+            else:
+                entity_probability = action_probability * conditional_entity
 
         valid = mask.to(action_probability.dtype)
         action_probability = action_probability * valid

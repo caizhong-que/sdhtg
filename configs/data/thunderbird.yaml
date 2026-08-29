@@ -1,9 +1,9 @@
 name: thunderbird
 adapter: thunderbird
-raw_dir: data/raw/Thunderbird
+raw_dir: data/raw/ThunderBird
 processed_dir: data/processed/thunderbird
 files:
-  - {path: Thunderbird.log, role: log, url: null, sha256: null}
+  - {path: Thunderbird_subset_10m.log, role: log, url: null, sha256: null}
 log_format: "<Label> <Timestamp> <Date> <User> <Month> <Day> <Time> <Location> <Component> <Pid> <Content>"
 encoding: utf-8
 timestamp_fields: [Timestamp]
@@ -16,5 +16,6 @@ anomaly_labels: []
 sessionization: adaptive_idle_gap
 adaptive_idle_multiplier: 2.0
 split: [0.6, 0.2, 0.2]
+split_seed: 42
 max_session_length: 512
 drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

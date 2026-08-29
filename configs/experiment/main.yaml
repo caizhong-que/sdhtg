@@ -1,15 +1,15 @@
 data:
-  processed_dir: data/processed/openstack
+  processed_dir: data/processed/bgl
   train_split: train
   validation_split: validation
   test_split: test
   num_workers: 0
   pin_memory: true
 
-model_config: configs/model/sdhtg.yaml
-output_dir: outputs/openstack/main
+model_config: configs/model/struct_entity.yaml
+output_dir: outputs/bgl/main
 seed: 42
-seeds: [42, 123, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
+seeds: [42, 123, 256, 512, 1024]
 
 deterministic: false
 batch_size: 2048
@@ -47,14 +47,16 @@ loss:
   classification_weight: 1.0
   prototype_weight: 0.05
   boundary_weight: 0.01
-  hierarchy_weight: 0.01
+  hierarchy_weight: 0.0
   contrastive_weight: 0.10
   prototype_margin: 0.5
+  prototype_temperature: 0.10
+  prototype_diversity_weight: 0.1
+  prototype_balance_weight: 0.1
   action_boundary_rate: 0.05
   entity_boundary_rate: 0.01
   boundary_entropy_weight: 1.0
   boundary_rate_weight: 1.0
-  boundary_separation_weight: 0.25
 
 contrastive:
   temperature: 0.07

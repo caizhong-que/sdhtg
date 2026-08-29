@@ -1,0 +1,118 @@
+# SDHTG 重构后的实验设计（增量验证协议）
+
+> 原则：创新思路不变，但每个模块必须先证明有效再并入主模型；论文里的每个
+> 数字必须能从 `outputs/<dataset>/<exp>/seed_*/result.json` 直接复现。
+
+## 1. 数据协议（已修复并重新生成缓存，2026-08-08）
+
+| 数据集 | 会话数 | 训练/验证/测试 | 测试未见模板率 | 异常率(会话级) |
+|---|---|---|---|---|
+| BGL | 268,960 | 随机 60/20/20 | 0.0% | 18.1% |
+| HDFS | 575,061 | 60/20/20 | 0.0% | 2.9% |
+| OpenStack | 2,083 | 60/20/20 | 0.7% | 43.6% |
+| SSH | 2,345 | 60/20/20 | 0.1% | 56.5% |
+| Thunderbird | 460,482 | 随机 60/20/20 | 0.2% | 1.67% |
+
+> BGL/Thunderbird 时序划分下测试模板漂移严重（BGL 79.4% 未见模板，测试 AUPRC
+> 被压到 ~0.50 接近随机），已切换为会话级分层随机划分（固定种子 42）。时序
+> 划分结果保留为 RQ4 稳健性分析。
+
+修复内容：
+1. 自适应空闲阈值只在训练侧估计：时序划分取前 60% 时间事件、随机划分取
+   随机 60% 事件样本（与随机训练集期望一致），验证/测试不参与（
+   `sessionize.estimate_adaptive_idle_thresholds`，结果写入 quality_report）。
+2. HDFS 共享 source_event_id 的会话并入同一分组再划分（`split.group_by_source_event`）。
+3. SSH 改为严格时序划分（移除 `split_seed`）；OpenStack 统一 60/20/20。
+4. OpenStack/SSH 外部标签：完全无覆盖的会话被排除并登记
+   （`unmatched_label_policy: exclude`），部分覆盖按正常处理并报告比例。
+5. 首事件 `action_change/entity_change = 0`，与论文公式 (17) 一致。
+
+## 1.1 会话构建审计（2026-08-08）
+
+发现并修复：
+- **按实体自适应空闲阈值失效 bug**：`estimate_adaptive_idle_thresholds` 对
+  transform 对齐的 Series 直接 `to_dict()`，键是事件索引而非实体，导致所有
+  实体回退到全局阈值。修复后 BGL 会话 493,058→396,382、Thunderbird
+  1,661,029→760,881，且 Thunderbird 训练异常会话从 282 恢复为 6,558（与
+  修复前最初的缓存一致，交叉验证修复正确）。
+- **随机划分与阈值窗口错位（2026-08-29 修复）**：随机划分后阈值估计仍取
+  最早 60% 时间事件，与随机训练集不对齐（BGL 13.9% 训练事件落到全局回退
+  阈值）。已改为随机 60% 事件样本，覆盖率达 99.998%。
+- **稀疏实体阈值上限（2026-08-29 新增）**：`adaptive_idle_max_seconds=3600`，
+  避免稀疏实体中位数×2 达到 300+ 天导致“会话”退化；上限写入 quality_report。
+- **SSH PID→IP 缓存过期（2026-08-29 新增）**：缓存带 600s 时间窗，PID 复用
+  不再串会话；无归属的单事件会话被排除并登记。
+- **分块保留跨块时间间隔（2026-08-29 新增）**：非首个块的 delta_t 相对上一块
+  末事件计算。
+- **未见实体/动作/状态统计（2026-08-29 新增）**：quality_report 补充
+  unseen_entity/action/status_rate，落实论文协议第 (7) 条；HDFS 跳过事件数
+  （skipped_event_count）一并报告。
+- **10M 事件内存溢出**：适配器改为生成器流式构建 DataFrame。
+- **块标签协议**：`materialize_sessions` 改用块内事件标签最大值（论文 5.2）；
+  实测对 BGL/SSH 多块样本无差异（长异常会话每块均含异常事件）。
+
+仍存在的会话构建局限（已记录）：
+- 阈值估计窗口用“前 60% 事件/随机 60% 样本”近似训练集，二者不完全等价；
+- 全局回退阈值（BGL 144s）对罕见实体仍偏激，观察后续结果再定；
+- OpenStack 固定窗口与请求边界不对齐，标签按窗口聚合。
+
+## 2. 组件阶梯（先验证再加）
+
+每个级别是上一级的严格超集，用相同种子/轮数跑验证集，记录测试 AUPRC：
+
+| 级别 | 加入模块 | 验证规则 |
+|---|---|---|
+| L0 | 基础 GRU + CB-Focal（无层次/图/原型） | 基准 |
+| L1 | 上下文策略 FiLM | vs L0 |
+| L2 | 可学习动作边界 + 层次聚合 | vs L1 |
+| L3 | 嵌套实体边界（乘法参数化） | vs L2 |
+| L4 | 局部时间边 | vs L3 |
+| L5 | 同语义边 | vs L4 |
+| L6 | 跨层归属边（软边权） | vs L5 |
+| L7 | 多正常原型（软最小距离 + λp/δp） | vs L6 |
+| L8 | 对比预训练（normal-only，掩码 0.10） | vs L7 |
+| L7b | +可导原型多样（hinge）/均衡（软分配）损失 | vs L7 |
+
+保留规则（至少 3 个种子，配对 Wilcoxon p<0.10 或均值提升 ≥0.005 且不劣化 F1）：
+- 若某级不满足规则，先检查实现/超参（温度、权重、边阈值）再复测一次；
+- 两次都无效则从主模型移除，并在论文消融表中如实报告“无效模块及原因”。
+
+## 3. 运行命令
+
+方向验证（快，BGL 子集 25k/6k/6k，词表已按协议重建）：
+```bash
+python scripts/make_iteration_dataset.py --dataset bgl --sizes 25000,6000,6000 --out data/processed/bgl_iter
+python scripts/run_ladder.py --config configs/experiment/bgl_iter.yaml \
+    --levels L0,L1,L2,L3,L4,L5,L6,L7 --seeds 42,123 --max-epochs 20 --tag ladder_iter
+```
+
+正式实验（全量缓存，5 数据集 × 5 种子）：
+```bash
+python scripts/run_ladder.py --config configs/experiment/<dataset>.yaml \
+    --levels L0,L1,L2,L3,L4,L5,L6,L7,L8 --seeds 42,123,256,512,1024 \
+    --max-epochs 100 --pretrain-epochs 10 --tag ladder_full
+```
+
+统计检验（论文 5.5）：
+```bash
+python scripts/statistical_tests.py --root outputs/<dataset>/main \
+    --baseline ladder_full/L0 --methods ladder_full/L1 ... ladder_full/L7
+```
+
+## 4. 论文表格填写规则
+
+- 表 5/6/7/8/9/10/11 的数字一律来自最终缓存上的 `run_ladder`/正式实验输出；
+- 每次运行后核对 `training_manifest.json` 中 `sessions.parquet` 哈希与
+  `data/processed/<dataset>/manifest.json` 一致；
+- 主结果阈值只由验证集校准（`threshold.json`），测试指标为冻结阈值下的结果；
+- Thunderbird/BGL 的时序划分分布漂移（BGL 测试 79% 未见模板）必须在论文
+  RQ4 如实分析，不得用旧缓存数字。
+
+## 5. 已对齐的论文-实现事实
+
+- 检测头池化：节点数归一化平滑最大池化（式 48，已实现）。
+- 原型距离：软最小距离 + 可学习 λp/δp（式 53-54，已实现）。
+- 层次/分离正则：已从训练目标移除（论文 4.10.3 声明与代码一致）。
+- Km：整数边数预算 {5,10}→10（表 4 已修正；实现于 containment_edges）。
+- 预训练增强：模板/动作/状态掩码 0.10；监督阶段 `mask_template_prob=0`。
+- 语义负样本：PAD/UNK 不参与重叠判定（已修复，实测损失非零）。

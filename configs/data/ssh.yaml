@@ -19,6 +19,6 @@ normal_labels: [Normal, normal, "0", "-"]
 anomaly_labels: [Anomaly, anomaly, "1"]
 sessionization: native
 split: [0.6, 0.2, 0.2]
-split_seed: 42
+unmatched_label_policy: exclude
 max_session_length: 512
 drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

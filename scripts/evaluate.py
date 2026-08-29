@@ -32,10 +32,13 @@ class BucketBatchSampler(Sampler):
     def __iter__(self): return iter(self.batches)
 
 def main():
-    p=argparse.ArgumentParser(); p.add_argument("--config",required=True)
-    p.add_argument("--checkpoint",required=True); p.add_argument("--seed",type=int,default=42)
+    p=argparse.ArgumentParser()
+    p.add_argument("--config",required=True)
+    p.add_argument("--checkpoint",required=True)
+    p.add_argument("--seed",type=int,default=42)
     p.add_argument("--batch-size",type=int,default=2048)
     a=p.parse_args()
+
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg=yaml.safe_load(Path(a.config).read_text())
     seed_everything(a.seed, bool(cfg.get("deterministic", True)))
@@ -45,7 +48,9 @@ def main():
     model=build_model(cfg["model_config"],ov).to(device).eval()
     ckpt=torch.load(a.checkpoint,map_location=device,weights_only=False)
     sd=ckpt["model"]
-    if any(k.startswith("model.") for k in sd): sd={k[6:]:v for k,v in sd.items() if k.startswith("model.")}
+    if any(k.startswith("model.") for k in sd):
+        sd={k[6:]:v for k,v in sd.items() if k.startswith("model.")}
+        
     model.load_state_dict(sd)
     print(f"Checkpoint loaded  epoch={ckpt.get('epoch','?')}")
     ds=SessionDataset(str(processed/"sessions.parquet"),"test")

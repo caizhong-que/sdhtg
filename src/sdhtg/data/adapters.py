@@ -83,12 +83,14 @@ class LineLabelAdapter(DatasetAdapter):
     def normalize(self) -> pd.DataFrame:
         if not self.cfg.label_field:
             raise ValueError("line-labelled adapter requires label_field")
-        events = []
-        for event_id, row in enumerate(self.read_log_rows()):
-            event = self.base_event(row, event_id)
-            event["event_label"] = self.explicit_label(row.get(self.cfg.label_field, ""))
-            events.append(event)
-        return finalize_events(events)
+        def _iter_events():
+            for event_id, row in enumerate(self.read_log_rows()):
+                event = self.base_event(row, event_id)
+                event["event_label"] = self.explicit_label(
+                    row.get(self.cfg.label_field, "")
+                )
+                yield event
+        return finalize_events(_iter_events())
 
 
 class HDFSAdapter(DatasetAdapter):
@@ -113,31 +115,54 @@ class HDFSAdapter(DatasetAdapter):
 
     def normalize(self) -> pd.DataFrame:
         labels = self.load_labels()
-        events = []
-        missing = set()
-        for event_id, row in enumerate(self.read_log_rows()):
-            base = self.base_event(row, event_id)
-            blocks = sorted(set(BLOCK_RE.findall(base["content"])))
-            if not blocks:
-                continue
-            for block in blocks:
-                if block not in labels:
-                    missing.add(block)
+        state = {"skipped": 0}
+
+        def _iter_events():
+            missing = set()
+            for event_id, row in enumerate(self.read_log_rows()):
+                base = self.base_event(row, event_id)
+                blocks = sorted(set(BLOCK_RE.findall(base["content"])))
+                if not blocks:
+                    state["skipped"] += 1
                     continue
-                event = dict(base)
-                event.update(entity=block, native_session_id=block,
-                             event_label=labels[block], session_label=labels[block])
-                events.append(event)
-        if missing:
-            sample = sorted(missing)[:20]
-            raise ValueError(f"{len(missing)} HDFS blocks have no official label; examples: {sample}")
-        return finalize_events(events)
+                for block in blocks:
+                    if block not in labels:
+                        missing.add(block)
+                        continue
+                    event = dict(base)
+                    event.update(
+                        entity=block,
+                        native_session_id=block,
+                        event_label=labels[block],
+                        session_label=labels[block],
+                    )
+                    yield event
+            if missing:
+                sample = sorted(missing)[:20]
+                raise ValueError(
+                    f"{len(missing)} HDFS blocks have no official label; "
+                    f"examples: {sample}"
+                )
+        frame = finalize_events(_iter_events())
+        self.skipped_event_count = state["skipped"]
+        return frame
 
 
 class ExternalLabelAdapter(DatasetAdapter):
     """OpenStack/SSH: explicit in-log labels or an external exact-key label table."""
     # PID->IP cache for SSH: sshd[PID] uniquely maps to a client IP.
+    PID_CACHE_TTL_SECONDS = 600.0
     _pid_ip_cache: dict[str, str] = {}
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        # Per-adapter state; reset the class-level PID cache so separate
+        # dataset runs in one process cannot contaminate each other.
+        type(self)._pid_ip_cache = {}
+        # pid -> (ip, timestamp) with an expiry window so recycled PIDs on
+        # long-running hosts do not leak across unrelated sessions.
+        type(self)._pid_ip_time_cache: dict[str, tuple[str, pd.Timestamp]] = {}
+        self.unmatched_label_stats = {"events": 0, "keys": []}
+
     def load_external_labels(self) -> dict[str, int] | None:
         specs = [x for x in self.cfg.files if x.role == "labels"]
         if not specs:
@@ -156,7 +181,13 @@ class ExternalLabelAdapter(DatasetAdapter):
             result[key] = value
         return result
 
-    def derive_session(self, row: dict, entity: str, event_id: int) -> str:
+    def derive_session(
+        self,
+        row: dict,
+        entity: str,
+        event_id: int,
+        timestamp: pd.Timestamp,
+    ) -> str:
         values = [str(row.get(x, "")).strip() for x in self.cfg.session_fields]
         values = [x for x in values if x and x != "-"]
         if values:
@@ -176,9 +207,16 @@ class ExternalLabelAdapter(DatasetAdapter):
             ip = ip_match.group(0).lower()
             if pid:
                 self._pid_ip_cache[pid] = ip
+                self._pid_ip_time_cache[pid] = (ip, timestamp)
             return ip
         if pid and pid in self._pid_ip_cache:
-            return self._pid_ip_cache[pid]
+            cached_ip, cached_time = self._pid_ip_time_cache.get(
+                pid, (self._pid_ip_cache[pid], timestamp)
+            )
+            if (timestamp - cached_time).total_seconds() <= self.PID_CACHE_TTL_SECONDS:
+                return cached_ip
+            self._pid_ip_cache.pop(pid, None)
+            self._pid_ip_time_cache.pop(pid, None)
         for regex in (REQUEST_RE, UUID_RE):
             match = regex.search(content)
             if match:
@@ -187,26 +225,54 @@ class ExternalLabelAdapter(DatasetAdapter):
 
     def normalize(self) -> pd.DataFrame:
         labels = self.load_external_labels()
-        events = []
-        for event_id, row in enumerate(self.read_log_rows()):
-            event = self.base_event(row, event_id)
-            session = self.derive_session(row, event["entity"], event_id)
-            event["native_session_id"] = session
-            if labels is not None:
-                join = str(row.get(self.cfg.label_join_key, session)).strip()
-                event["event_label"] = labels.get(join, 0)
-            elif self.cfg.label_field and self.cfg.label_field in row:
-                event["event_label"] = self.explicit_label(row[self.cfg.label_field])
-            else:
-                raise ValueError("OpenStack/SSH requires explicit label field or external label file")
-            events.append(event)
-        return finalize_events(events)
+        state = {"unmatched": 0, "keys": set()}
+
+        def _iter_events():
+            for event_id, row in enumerate(self.read_log_rows()):
+                event = self.base_event(row, event_id)
+                session = self.derive_session(
+                    row, event["entity"], event_id, event["timestamp"]
+                )
+                event["native_session_id"] = session
+                if labels is not None:
+                    join = str(row.get(self.cfg.label_join_key, session)).strip()
+                    if join in labels:
+                        event["event_label"] = labels[join]
+                        event["label_matched"] = True
+                    else:
+                        state["unmatched"] += 1
+                        state["keys"].add(join)
+                        if self.cfg.unmatched_label_policy == "raise":
+                            raise ValueError(
+                                f"{self.cfg.name}: events have no label for "
+                                f"key {join!r}; configure unmatched_label_policy "
+                                f"or fix the label table"
+                            )
+                        event["event_label"] = 0
+                        event["label_matched"] = False
+                elif self.cfg.label_field and self.cfg.label_field in row:
+                    event["event_label"] = self.explicit_label(
+                        row[self.cfg.label_field]
+                    )
+                else:
+                    raise ValueError(
+                        "OpenStack/SSH requires explicit label field or "
+                        "external label file"
+                    )
+                yield event
+
+        frame = finalize_events(_iter_events())
+        self.unmatched_label_stats = {
+            "events": state["unmatched"],
+            "keys": sorted(state["keys"])[:20],
+        }
+        return frame
 
 
 def finalize_events(events: list[dict]) -> pd.DataFrame:
-    if not events:
+    frame = pd.DataFrame.from_records(events)
+    if frame.empty:
         raise ValueError("adapter produced zero labelled events")
-    frame = pd.DataFrame(events)
     required = {"source_event_id", "source_line", "timestamp", "content", "entity", "event_label"}
     missing = required - set(frame.columns)
     if missing:

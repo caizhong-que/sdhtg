@@ -209,7 +209,9 @@ class DifferentiableHierarchy(nn.Module):
                 mask=event_mask,
                 mass=status_mass,
                 positions=status_positions,
-                semantic_id=action_ids,
+                # Status nodes form same-semantic edges by entity identity
+                # (manuscript 4.7.2: entity or template identity).
+                semantic_id=entity_ids,
                 membership=status_membership,
             ),
             action=HierarchyLevel(

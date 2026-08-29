@@ -3,7 +3,6 @@ model:
   entity_vocab_size: 1024
   action_vocab_size: 1024
   status_vocab_size: 4096
-
   hidden_dim: 256
   strategy_dim: 64
   time_dim: 32
@@ -43,7 +42,6 @@ model:
     use_strategy_film: true
     use_action_boundary: true
     use_entity_boundary: true
-    use_learned_containment: true
     use_temporal_edges: true
     use_semantic_edges: true
     use_cross_level_messages: true

@@ -1,0 +1,29 @@
+model:
+  template_vocab_size: 4096
+  entity_vocab_size: 1024
+  action_vocab_size: 1024
+  status_vocab_size: 4096
+  ablation:
+    use_template_source: true
+    use_entity_source: true
+    use_action_source: true
+    use_status_source: true
+    use_time_source: true
+    use_strategy_film: true
+    use_action_boundary: true
+    use_entity_boundary: true
+    use_temporal_edges: true
+    use_semantic_edges: true
+    use_cross_level_messages: true
+    use_prototypes: true
+    detach_boundary_from_graph: false
+    single_boundary: false
+    independent_boundaries: false
+    hard_edge_weight: false
+  boundary:
+    mode: learned
+    initial_temperature: 1.0
+    final_temperature: 0.10
+    minimum_temperature: 0.05
+    prior_logit_scale: 1.0
+    force_first_boundary: true

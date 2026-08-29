@@ -20,6 +20,7 @@ normal_labels: [Normal, normal, "0", "-"]
 anomaly_labels: [Anomaly, anomaly, "1"]
 sessionization: fixed_window
 fixed_window_size: 100
-split: [0.7, 0.1, 0.2]
+split: [0.6, 0.2, 0.2]
+unmatched_label_policy: exclude
 max_session_length: 512
 drain: {depth: 4, similarity_threshold: 0.5, max_children: 100}

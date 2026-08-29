@@ -38,10 +38,13 @@ class DataConfig:
     fixed_window_size: int = 100
     idle_gap_seconds: float = 60.0
     adaptive_idle_multiplier: float = 2.0
+    adaptive_idle_max_seconds: float = 3600.0
     max_session_length: int = 512
     drain: dict[str, Any] = field(default_factory=dict)
     regex: dict[str, str] = field(default_factory=dict)
     split_seed: int | None = None
+    group_by_source_event: bool = False
+    unmatched_label_policy: str = "normal"
 
     def file_by_role(self, role: str) -> FileSpec:
         matches = [x for x in self.files if x.role == role]
@@ -69,4 +72,9 @@ def load_config(path: str | Path) -> DataConfig:
         raise ValueError("split must contain three positive ratios summing to one")
     if cfg.sessionization not in {"native", "fixed_window", "idle_gap", "adaptive_idle_gap"}:
         raise ValueError(f"unsupported sessionization: {cfg.sessionization}")
+    if cfg.unmatched_label_policy not in {"normal", "raise", "exclude"}:
+        raise ValueError(
+            f"unmatched_label_policy must be normal/raise/exclude, "
+            f"got {cfg.unmatched_label_policy!r}"
+        )
     return cfg

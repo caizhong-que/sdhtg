@@ -14,7 +14,16 @@ PAD, UNK = "<PAD>", "<UNK>"
 def build_vocab(values: pd.Series) -> dict[str, int]:
     counts = Counter(map(str, values))
     ordered = sorted(counts, key=lambda x: (-counts[x], x))
-    return {PAD: 0, UNK: 1, **{value: i + 2 for i, value in enumerate(ordered)}}
+    vocab = {PAD: 0, UNK: 1}
+    next_id = 2
+    for value in ordered:
+        if value in (PAD, UNK):
+            # Sentinel tokens are reserved; a real token with the same string
+            # must not overwrite their IDs.
+            continue
+        vocab[value] = next_id
+        next_id += 1
+    return vocab
 
 
 def encode(value: object, vocab: dict[str, int]) -> int:
@@ -43,9 +52,18 @@ def materialize_sessions(events: pd.DataFrame, vocabs: dict, max_length: int) ->
     records = []
     ordered = events.sort_values(["session_id", "timestamp", "source_event_id"], kind="mergesort")
     for session_id, group in ordered.groupby("session_id", sort=False):
+        session_times = group.timestamp.astype("int64").to_numpy() / 1e9
         for chunk_index, chunk in enumerate(chunk_session(group, max_length)):
-            times = chunk.timestamp.astype("int64").to_numpy() / 1e9
-            delta = np.diff(times, prepend=times[0]).clip(min=0)
+            start = chunk_index * max_length
+            times = session_times[start:start + len(chunk)]
+            # Preserve the inter-chunk gap: the first event of chunk > 0 keeps
+            # its delta relative to the last event of the previous chunk.
+            previous = (
+                session_times[start - 1]
+                if start > 0
+                else times[0]
+            )
+            delta = np.diff(times, prepend=previous).clip(min=0)
             action = chunk.action_sem.astype(str).tolist()
             entity = chunk.entity_sem.astype(str).tolist()
             records.append({
@@ -53,7 +71,14 @@ def materialize_sessions(events: pd.DataFrame, vocabs: dict, max_length: int) ->
                 "session_id": str(session_id),
                 "chunk_index": chunk_index,
                 "split": str(chunk.split.iloc[0]),
-                "label": int(chunk.session_label.max()),
+                # Chunk label: max of the chunk's EVENT labels when event-level
+                # labels exist (BGL/Thunderbird), identical to the session
+                # label otherwise (HDFS/SSH per-key labels are session-uniform).
+                "label": int(
+                    chunk.event_label.max()
+                    if "event_label" in chunk
+                    else chunk.session_label.max()
+                ),
                 "start_timestamp": chunk.timestamp.iloc[0],
                 "end_timestamp": chunk.timestamp.iloc[-1],
                 "source_event_ids": chunk.source_event_id.astype(int).tolist(),
@@ -62,8 +87,10 @@ def materialize_sessions(events: pd.DataFrame, vocabs: dict, max_length: int) ->
                 "action_ids": [encode(x, vocabs["action"]) for x in action],
                 "status_ids": [encode(x, vocabs["status"]) for x in chunk.status_sem],
                 "delta_t": delta.astype(float).tolist(),
-                "action_change": [1.0] + [float(a != b) for a, b in zip(action[:-1], action[1:])],
-                "entity_change": [1.0] + [float(a != b) for a, b in zip(entity[:-1], entity[1:])],
+                # First-event priors are 0 by definition (no previous event),
+                # matching the manuscript's dA_1 = dE_1 = 0.
+                "action_change": [0.0] + [float(a != b) for a, b in zip(action[:-1], action[1:])],
+                "entity_change": [0.0] + [float(a != b) for a, b in zip(entity[:-1], entity[1:])],
                 "length": len(chunk),
                 "truncated": len(group) > max_length,
             })

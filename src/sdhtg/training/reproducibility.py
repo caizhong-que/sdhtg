@@ -31,8 +31,12 @@ def hash_state_dict(model) -> str:
 def write_training_manifest(path: Path, *, seed: int, config_paths: list[str], data_paths: list[str], model) -> dict:
     try: commit=subprocess.check_output(["git","rev-parse","HEAD"],text=True,stderr=subprocess.DEVNULL).strip()
     except Exception: commit=None
+    def safe_hash(file_path: str) -> str | None:
+        if Path(file_path).is_file():
+            return hash_file(file_path)
+        return None
     value={"seed":seed,"git_commit":commit,"python":sys.version,"platform":platform.platform(),
            "torch":torch.__version__,"cuda":torch.version.cuda,"cudnn":torch.backends.cudnn.version(),
-           "configs":{p:hash_file(p) for p in config_paths},"data":{p:hash_file(p) for p in data_paths},
+           "configs":{p:safe_hash(p) for p in config_paths},"data":{p:safe_hash(p) for p in data_paths},
            "initial_model_sha256":hash_state_dict(model)}
     path.parent.mkdir(parents=True,exist_ok=True); path.write_text(json.dumps(value,indent=2),encoding="utf-8"); return value
