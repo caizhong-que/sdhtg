@@ -38,21 +38,25 @@ LEVEL_ABLATIONS = {
     "L0": {},  # flat GRU + CB-Focal only
     "L1": {"use_strategy_film": True},  # + contextual FiLM
     "L2": {  # + learned action boundary and hierarchical aggregation
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
     },
     "L3": {  # + nested entity boundary
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
         "use_entity_boundary": True,
     },
     "L4": {  # + local temporal edges
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
         "use_entity_boundary": True,
         "use_temporal_edges": True,
     },
     "L5": {  # + same-semantic edges
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
         "use_entity_boundary": True,
@@ -60,6 +64,7 @@ LEVEL_ABLATIONS = {
         "use_semantic_edges": True,
     },
     "L6": {  # + cross-level containment edges
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
         "use_entity_boundary": True,
@@ -68,6 +73,7 @@ LEVEL_ABLATIONS = {
         "use_cross_level_messages": True,
     },
     "L7": {  # + multi-normal prototypes (lambda_p, delta_p)
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
         "use_entity_boundary": True,
@@ -77,6 +83,7 @@ LEVEL_ABLATIONS = {
         "use_prototypes": True,
     },
     "L8": {  # L7 + contrastive pretraining (handled separately)
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
         "use_entity_boundary": True,
@@ -86,6 +93,7 @@ LEVEL_ABLATIONS = {
         "use_prototypes": True,
     },
     "L7b": {  # L7 + differentiable prototype diversity/balance losses
+        "use_strategy_film": True,
         "use_hierarchy": True,
         "use_action_boundary": True,
         "use_entity_boundary": True,
