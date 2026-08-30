@@ -93,6 +93,13 @@ def collate_sessions(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "sample_id": [str(row["sample_id"]) for row in rows],
         "session_id": [str(row["session_id"]) for row in rows],
     }
+    if any("boundary_label" in row for row in rows):
+        boundary = torch.zeros(batch_size, maximum_length, dtype=torch.float32)
+        for batch_index, (row, length) in enumerate(zip(rows, lengths)):
+            boundary[batch_index, :length] = torch.as_tensor(
+                row["boundary_label"], dtype=torch.float32
+            )
+        batch["boundary_label"] = boundary
     return batch
 
 

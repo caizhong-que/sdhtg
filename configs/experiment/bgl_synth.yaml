@@ -55,7 +55,8 @@ loss:
   entity_boundary_rate: 0.05
   boundary_entropy_weight: 1.0
   boundary_rate_weight: 1.0
-  boundary_aux_weight: 0.1
+  boundary_aux_weight: 0.0
+  boundary_supervision_weight: 0.5
   prototype_temperature: 0.10
   prototype_diversity_weight: 0.1
   prototype_balance_weight: 0.1

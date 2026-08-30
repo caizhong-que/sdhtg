@@ -167,6 +167,8 @@ def main() -> None:
                 + [float(a != b) for a, b in zip(action[:-1], action[1:])],
                 "entity_change": [0.0]
                 + [float(a != b) for a, b in zip(entity[:-1], entity[1:])],
+                "boundary_label": [1.0 if i in junctions else 0.0
+                                   for i in range(len(sequence))],
                 "length": len(sequence),
                 "truncated": False,
             }
@@ -237,6 +239,7 @@ def main() -> None:
             "delta_t": frame.delta_t,
             "action_change": frame.action_change,
             "entity_change": frame.entity_change,
+            "boundary_label": frame.boundary_label,
             "length": frame.length,
             "truncated": frame.truncated,
         }

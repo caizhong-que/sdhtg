@@ -75,6 +75,7 @@ class Trainer:
                     action_change=batch["action_change"],
                     entity_change=batch["entity_change"],
                     template_id=batch["template_id"],
+                    boundary_label=batch.get("boundary_label"),
                 ).total/accumulation
             self.scaler.scale(loss).backward()
             if (index+1)%accumulation==0 or index+1==len(self.train_loader):

@@ -30,6 +30,7 @@ class CompositeLoss(nn.Module):
         action_change: Tensor | None = None,
         entity_change: Tensor | None = None,
         template_id: Tensor | None = None,
+        boundary_label: Tensor | None = None,
     ) -> CompositeLossOutput:
         c=self.config
         # Samples with label == -1 are unlabeled (label-scarcity protocol):
@@ -116,6 +117,28 @@ class CompositeLoss(nn.Module):
                 # boundary_weight (which would otherwise shrink it 100x).
             else:
                 aux = output.anomaly_logit.sum() * 0.0
+            # Direct boundary supervision on semi-synthetic/human-annotated
+            # subsets: BCE against the true junction positions.
+            super_weight = float(c.get("boundary_supervision_weight", 0.0))
+            if super_weight > 0.0 and boundary_label is not None:
+                valid = output.status_node_mask.to(boundary_label.dtype)
+                target = boundary_label.to(output.action_boundary.dtype) * valid
+                supervision = F.binary_cross_entropy(
+                    output.action_boundary.float().cpu(),
+                    target.float().cpu(),
+                    weight=valid.float().cpu(),
+                    reduction="sum",
+                ) + F.binary_cross_entropy(
+                    output.entity_boundary.float().cpu(),
+                    target.float().cpu(),
+                    weight=valid.float().cpu(),
+                    reduction="sum",
+                )
+                supervision = (
+                    supervision.to(output.action_boundary.device)
+                    / valid.sum().clamp_min(1.0)
+                )
+                boundary_total = boundary_total + super_weight * supervision
         else:
             boundary_total = output.anomaly_logit.sum() * 0.0
             hierarchy_loss = output.anomaly_logit.sum() * 0.0
