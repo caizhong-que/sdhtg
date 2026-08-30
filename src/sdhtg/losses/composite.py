@@ -96,13 +96,20 @@ class CompositeLoss(nn.Module):
                 ).to(output.action_boundary.dtype)
                 action_target = template_change * valid
                 entity_target = entity_change.to(output.entity_boundary.dtype)
+                # Compute on CPU in FP32 to stay safe under AMP autocast;
+                # autograd flows back through the .cpu() copy.
                 aux = F.binary_cross_entropy(
-                    output.action_boundary, action_target,
-                    weight=valid, reduction="sum",
+                    output.action_boundary.float().cpu(),
+                    action_target.float().cpu(),
+                    weight=valid.float().cpu(),
+                    reduction="sum",
                 ) + F.binary_cross_entropy(
-                    output.entity_boundary, entity_target,
-                    weight=valid, reduction="sum",
+                    output.entity_boundary.float().cpu(),
+                    entity_target.float().cpu(),
+                    weight=valid.float().cpu(),
+                    reduction="sum",
                 )
+                aux = aux.to(output.action_boundary.device)
                 aux = aux / valid.sum().clamp_min(1.0)
                 boundary_total = boundary_total + aux_weight * aux
             else:
