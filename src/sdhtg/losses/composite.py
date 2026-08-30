@@ -111,7 +111,9 @@ class CompositeLoss(nn.Module):
                 )
                 aux = aux.to(output.action_boundary.device)
                 aux = aux / valid.sum().clamp_min(1.0)
-                boundary_total = boundary_total + aux_weight * aux
+                # Keep the aux term separate: it gets its own weight and is
+                # warmed up by the curriculum boundary_scale, independent of
+                # boundary_weight (which would otherwise shrink it 100x).
             else:
                 aux = output.anomaly_logit.sum() * 0.0
         else:
@@ -123,6 +125,7 @@ class CompositeLoss(nn.Module):
             +c["prototype_weight"]*prototype
             +diversity
             +boundary_scale*c["boundary_weight"]*boundary_total
+            +boundary_scale*c.get("boundary_aux_weight", 0.0)*aux
             +boundary_scale*c.get("hierarchy_weight", 0.0)*hierarchy_loss
             +c["contrastive_weight"]*contrastive)
         parts={"classification":classification,"prototype":prototype,"diversity":diversity,
