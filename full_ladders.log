@@ -1,0 +1,72 @@
+########## DATASET openstack 2026/08/30 周日 21:44:43.87 ########## 
+  L0 seed 42: cached
+  L0 seed 123: cached
+  L0 seed 256: cached
+  L0 seed 512: cached
+  L0 seed 1024: cached
+[L0] 基础 GRU: valAUPRC 1.0000±0.0000  testAUPRC 1.0000±0.0000  F1 0.9991±0.0020
+  L1 seed 42: cached
+  L1 seed 123: cached
+  L1 seed 256: cached
+  L1 seed 512: cached
+  L1 seed 1024: cached
+[L1] +FiLM: valAUPRC 1.0000±0.0000  testAUPRC 1.0000±0.0001  F1 0.9996±0.0010  (ΔAUPRC -0.0000)
+  L2 seed 42: cached
+  L2 seed 123: cached
+  L2 seed 256: cached
+  L2 seed 512: cached
+  L2 seed 1024: cached
+[L2] +动作边界/层次聚合: valAUPRC 1.0000±0.0000  testAUPRC 1.0000±0.0001  F1 0.9982±0.0024  (ΔAUPRC -0.0000)
+  L3 seed 42: cached
+  L3 seed 123: cached
+  L3 seed 256: cached
+  L3 seed 512: cached
+  L3 seed 1024: cached
+[L3] +嵌套实体边界: valAUPRC 1.0000±0.0000  testAUPRC 1.0000±0.0001  F1 0.9991±0.0020  (ΔAUPRC +0.0000)
+  L4 seed 42: cached
+  L4 seed 123: cached
+  L4 seed 256: cached
+  L4 seed 512: cached
+  L4 seed 1024: cached
+[L4] +时间边: valAUPRC 1.0000±0.0000  testAUPRC 0.9999±0.0002  F1 0.9978±0.0031  (ΔAUPRC -0.0001)
+  L5 seed 42: cached
+  L5 seed 123: cached
+  L5 seed 256: cached
+  L5 seed 512: cached
+  L5 seed 1024: cached
+[L5] +语义边: valAUPRC 1.0000±0.0000  testAUPRC 1.0000±0.0001  F1 0.9991±0.0020  (ΔAUPRC +0.0001)
+  L6 seed 42: cached
+  L6 seed 123: cached
+  L6 seed 256: cached
+  L6 seed 512: cached
+  L6 seed 1024: cached
+[L6] +跨层消息: valAUPRC 0.9999±0.0001  testAUPRC 0.9999±0.0001  F1 0.9982±0.0024  (ΔAUPRC -0.0000)
+  L7 seed 42: cached
+  L7 seed 123: cached
+  L7 seed 256: cached
+  L7 seed 512: cached
+  L7 seed 1024: cached
+[L7] +多正常原型: valAUPRC 1.0000±0.0000  testAUPRC 1.0000±0.0001  F1 0.9991±0.0012  (ΔAUPRC +0.0000)
+  L7b seed 42: cached
+  L7b seed 123: cached
+  L7b seed 256: cached
+  L7b seed 512: cached
+  L7b seed 1024: cached
+[L7b] +原型多样/均衡: valAUPRC 1.0000±0.0000  testAUPRC 0.9999±0.0001  F1 0.9974±0.0036  (ΔAUPRC -0.0000)
+
+Saved summary to outputs\_ladder\main\ladder_full\ladder_summary.json
+########## DATASET bgl 2026/08/30 周日 21:44:43.87 ########## 
+  L0 seed 42: cached
+  L0 seed 123: cached
+  L0 seed 256: cached
+  L0 seed 512: cached
+  L0 seed 1024: cached
+[L0] 基础 GRU: valAUPRC 0.9998±0.0000  testAUPRC 1.0000±0.0000  F1 0.9981±0.0006
+  L1 seed 42: cached
+  L1 seed 123: cached
+  L1 seed 256: running ...
+21:44:48 started  seed=256  device=cuda
+21:44:48 data  samples=data/processed/bgl  batch=2048  workers=0
+21:44:51 model  params=9902805  train=172194  valid=57681
+21:44:51 supervised  train=172194  normal=141750  anomaly=30444  ratio=0.1768  label_fraction=1.00
+21:44:52 epoch 0 start  temp=1.00  film=0.33
