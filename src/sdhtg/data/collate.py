@@ -40,8 +40,8 @@ def _validate_row(row: dict[str, Any], index: int) -> int:
                 f"row {index} field {field!r} has length {len(row[field])}, "
                 f"expected {length}"
             )
-    if int(row["label"]) not in (0, 1):
-        raise ValueError(f"row {index} label must be binary")
+    if int(row["label"]) not in (-1, 0, 1):
+        raise ValueError(f"row {index} label must be -1/0/1 (unlabeled/binary)")
     if any(float(value) < 0 for value in row["delta_t"]):
         raise ValueError(f"row {index} has a negative delta_t")
     return length

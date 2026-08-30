@@ -23,17 +23,25 @@ class CompositeLoss(nn.Module):
     def forward(self, output, labels: Tensor, contrastive_loss: Tensor | None = None,
                 boundary_scale: float = 1.0) -> CompositeLossOutput:
         c=self.config
+        # Samples with label == -1 are unlabeled (label-scarcity protocol):
+        # they contribute to boundary/self-supervised terms but not to the
+        # supervised classification/prototype losses.
+        sample_weight = (labels >= 0).to(labels.dtype)
+        labels_safe = labels.clamp_min(0.0)
         classification=classification_loss(
-            output.anomaly_logit, labels, self.class_counts,
+            output.anomaly_logit, labels_safe, self.class_counts,
             c.get("loss_type", "cb_focal"),
             c.get("effective_number_beta", 0.9999),
             c.get("focal_gamma", 2.0),
-            c.get("label_smoothing", 0.0))
+            c.get("label_smoothing", 0.0),
+            sample_weight)
         ablation=self.ablation_config
         if ablation is not None and not ablation.use_prototypes:
             prototype=output.anomaly_logit.sum()*0.0
         else:
-            prototype=prototype_margin_loss(output.prototype_distance, labels, c["prototype_margin"])
+            prototype=prototype_margin_loss(
+                output.prototype_distance, labels_safe, c["prototype_margin"],
+                sample_weight)
         if (
             ablation is not None
             and ablation.use_prototypes
@@ -45,8 +53,9 @@ class CompositeLoss(nn.Module):
                 + c.get("prototype_balance_weight", 0.1)
                 * prototype_balance_loss(
                     output.prototype_distances,
-                    labels,
+                    labels_safe,
                     c.get("prototype_temperature", 0.1),
+                    sample_weight=sample_weight,
                 )
             )
         else:

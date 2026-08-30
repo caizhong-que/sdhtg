@@ -21,6 +21,7 @@ def class_balanced_focal_loss(
     beta: float = 0.9999,
     gamma: float = 2.0,
     label_smoothing: float = 0.0,
+    sample_weight: Tensor | None = None,
 ) -> Tensor:
     targets = targets.to(logits.dtype)
     if logits.shape != targets.shape:
@@ -33,18 +34,29 @@ def class_balanced_focal_loss(
     pt = torch.where(targets.bool(), probability, 1.0 - probability)
     weights = effective_number_weights(class_counts, beta).to(logits.device)
     alpha = weights[targets.long()]
-    return (alpha * (1.0 - pt).pow(gamma) * bce).mean()
+    loss = alpha * (1.0 - pt).pow(gamma) * bce
+    if sample_weight is not None:
+        loss = loss * sample_weight.to(loss.dtype)
+        denominator = sample_weight.to(loss.dtype).sum().clamp_min(1.0)
+        return loss.sum() / denominator
+    return loss.mean()
 
 
 def binary_cross_entropy_loss(
     logits: Tensor,
     targets: Tensor,
     label_smoothing: float = 0.0,
+    sample_weight: Tensor | None = None,
 ) -> Tensor:
     """Plain binary cross-entropy without class weighting."""
     targets = targets.to(logits.dtype)
     smooth = targets * (1 - 2 * label_smoothing) + label_smoothing
-    return F.binary_cross_entropy_with_logits(logits, smooth)
+    loss = F.binary_cross_entropy_with_logits(logits, smooth, reduction="none")
+    if sample_weight is not None:
+        loss = loss * sample_weight.to(loss.dtype)
+        denominator = sample_weight.to(loss.dtype).sum().clamp_min(1.0)
+        return loss.sum() / denominator
+    return loss.mean()
 
 
 def weighted_bce_loss(
@@ -53,6 +65,7 @@ def weighted_bce_loss(
     class_counts: Tensor,
     beta: float = 0.9999,
     label_smoothing: float = 0.0,
+    sample_weight: Tensor | None = None,
 ) -> Tensor:
     """BCE weighted by effective-number class weights."""
     targets = targets.to(logits.dtype)
@@ -60,7 +73,12 @@ def weighted_bce_loss(
     bce = F.binary_cross_entropy_with_logits(logits, smooth, reduction="none")
     weights = effective_number_weights(class_counts, beta).to(logits.device)
     alpha = weights[targets.long()]
-    return (alpha * bce).mean()
+    loss = alpha * bce
+    if sample_weight is not None:
+        loss = loss * sample_weight.to(loss.dtype)
+        denominator = sample_weight.to(loss.dtype).sum().clamp_min(1.0)
+        return loss.sum() / denominator
+    return loss.mean()
 
 
 def focal_loss(
@@ -68,6 +86,7 @@ def focal_loss(
     targets: Tensor,
     gamma: float = 2.0,
     label_smoothing: float = 0.0,
+    sample_weight: Tensor | None = None,
 ) -> Tensor:
     """Focal loss without class weights (alpha = 1)."""
     targets = targets.to(logits.dtype)
@@ -75,7 +94,12 @@ def focal_loss(
     bce = F.binary_cross_entropy_with_logits(logits, smooth, reduction="none")
     probability = torch.sigmoid(logits)
     pt = torch.where(targets.bool(), probability, 1.0 - probability)
-    return ((1.0 - pt).pow(gamma) * bce).mean()
+    loss = (1.0 - pt).pow(gamma) * bce
+    if sample_weight is not None:
+        loss = loss * sample_weight.to(loss.dtype)
+        denominator = sample_weight.to(loss.dtype).sum().clamp_min(1.0)
+        return loss.sum() / denominator
+    return loss.mean()
 
 
 def classification_loss(
@@ -86,19 +110,28 @@ def classification_loss(
     beta: float = 0.9999,
     gamma: float = 2.0,
     label_smoothing: float = 0.0,
+    sample_weight: Tensor | None = None,
 ) -> Tensor:
     """Dispatch among bce / weighted_bce / focal / cb_focal."""
     if loss_type == "bce":
-        return binary_cross_entropy_loss(logits, targets, label_smoothing)
+        return binary_cross_entropy_loss(
+            logits, targets, label_smoothing, sample_weight
+        )
     if loss_type == "weighted_bce":
         return weighted_bce_loss(
-            logits, targets, class_counts, beta, label_smoothing
+            logits, targets, class_counts, beta, label_smoothing, sample_weight
         )
     if loss_type == "focal":
-        return focal_loss(logits, targets, gamma, label_smoothing)
+        return focal_loss(logits, targets, gamma, label_smoothing, sample_weight)
     if loss_type == "cb_focal":
         return class_balanced_focal_loss(
-            logits, targets, class_counts, beta, gamma, label_smoothing
+            logits,
+            targets,
+            class_counts,
+            beta,
+            gamma,
+            label_smoothing,
+            sample_weight,
         )
     raise ValueError(
         f"loss_type must be bce/weighted_bce/focal/cb_focal, got {loss_type!r}"

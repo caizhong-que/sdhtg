@@ -61,6 +61,42 @@ class BucketBatchSampler(Sampler):
         return iter(self.batches)
 
 
+class LabelFractionDataset(torch.utils.data.Dataset):
+    """Randomly masks a fraction of training labels for the scarcity protocol.
+
+    Masked samples return label == -1; they stay in the loader (so they can
+    participate in contrastive pretraining and boundary regularization) but
+    are ignored by the supervised classification/prototype losses.
+    """
+
+    def __init__(self, dataset, fraction: float, seed: int):
+        self.dataset = dataset
+        rng = np.random.default_rng(seed)
+        self.keep = rng.random(len(dataset)) < float(fraction)
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    @property
+    def lengths(self):
+        return self.dataset.lengths
+
+    @property
+    def labels(self):
+        return [
+            int(label)
+            for label, keep in zip(self.dataset.labels, self.keep)
+            if keep
+        ]
+
+    def __getitem__(self, index):
+        row = self.dataset[index]
+        if not self.keep[index]:
+            row = dict(row)
+            row["label"] = -1.0
+        return row
+
+
 def make_loader(dataset, cfg, *, shuffle: bool, seed: int):
     sampler = BucketBatchSampler(dataset.lengths, int(cfg["batch_size"]), shuffle=shuffle)
     return DataLoader(
@@ -85,6 +121,7 @@ def main() -> None:
     parser.add_argument("--max-epochs", type=int, default=None)
     parser.add_argument("--pretrain-epochs", type=int, default=None)
     parser.add_argument("--mask-template-prob", type=float, default=None)
+    parser.add_argument("--label-fraction", type=float, default=1.0)
     parser.add_argument(
         "--loss-type",
         choices=("bce", "weighted_bce", "focal", "cb_focal"),
@@ -237,13 +274,22 @@ def main() -> None:
     if args.pretrain_only:
         return
 
-    labels = [int(l) for l in train_dataset.labels]
+    supervised_train = (
+        LabelFractionDataset(train_dataset, args.label_fraction, seed)
+        if args.label_fraction < 1.0
+        else train_dataset
+    )
+    labels = [int(l) for l in supervised_train.labels]
     counts = torch.tensor([labels.count(0), labels.count(1)])
-    logger.info("supervised  train=%d  normal=%d  anomaly=%d  ratio=%.4f", len(labels), labels.count(0), labels.count(1), labels.count(1)/max(len(labels),1))
+    logger.info(
+        "supervised  train=%d  normal=%d  anomaly=%d  ratio=%.4f  label_fraction=%.2f",
+        len(labels), labels.count(0), labels.count(1),
+        labels.count(1)/max(len(labels),1), args.label_fraction,
+    )
     if (counts == 0).any():
         raise ValueError("supervised training split must contain both classes")
 
-    train_loader = make_loader(train_dataset, cfg, shuffle=True, seed=seed + 1)
+    train_loader = make_loader(supervised_train, cfg, shuffle=True, seed=seed + 1)
     validation_loader = make_loader(validation_dataset, cfg, shuffle=False, seed=seed)
     test_loader = make_loader(test_dataset, cfg, shuffle=False, seed=seed)
     criterion = CompositeLoss(cfg["loss"], counts, ablation_config=model.config.ablation).to(device)

@@ -1,0 +1,49 @@
+model:
+  ablation:
+    use_action_boundary: true
+    use_cross_level_messages: true
+    use_entity_boundary: true
+    use_hierarchy: true
+    use_prototypes: true
+    use_semantic_edges: true
+    use_strategy_film: true
+    use_temporal_edges: true
+  action_vocab_size: 1024
+  boundary:
+    final_temperature: 0.1
+    force_first_boundary: true
+    initial_temperature: 1.0
+    minimum_temperature: 0.05
+    prior_logit_scale: 1.0
+  detector_pool_temperature: 0.2
+  dropout: 0.1
+  entity_vocab_size: 1024
+  graph_heads: 4
+  graph_layers: 2
+  graph_relations:
+    containment: true
+    reverse_containment: true
+    self_loops: true
+    semantic: true
+    temporal: true
+  hidden_dim: 256
+  hierarchy:
+    membership_epsilon: 1.0e-06
+    minimum_node_mass: 1.0e-05
+    normalize_membership: true
+  level_dim: 16
+  local_temporal_radius:
+    action: 4
+    entity: 2
+    status: 8
+  num_gru_layers: 2
+  num_normal_prototypes: 8
+  prototype_temperature: 0.1
+  semantic_neighbors:
+    action: 4
+    entity: 2
+    status: 4
+  status_vocab_size: 4096
+  strategy_dim: 64
+  template_vocab_size: 4096
+  time_dim: 32
