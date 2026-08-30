@@ -69,7 +69,13 @@ class Trainer:
                 batch["template_id"]=batch["template_id"].masked_fill(tm,1)
             with self._autocast():
                 output=self.model(batch,boundary_temperature=state.boundary_temperature,film_strength=state.film_strength)
-                loss=self.criterion(output,batch["label"],boundary_scale=state.boundary_loss_scale).total/accumulation
+                loss=self.criterion(
+                    output, batch["label"],
+                    boundary_scale=state.boundary_loss_scale,
+                    action_change=batch["action_change"],
+                    entity_change=batch["entity_change"],
+                    template_id=batch["template_id"],
+                ).total/accumulation
             self.scaler.scale(loss).backward()
             if (index+1)%accumulation==0 or index+1==len(self.train_loader):
                 # Gradient accumulation boundary: unscale once, clip, step.

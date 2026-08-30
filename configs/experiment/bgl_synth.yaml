@@ -1,0 +1,73 @@
+# Synthetic structure-only anomaly dataset (workflow-swap construction).
+data:
+  processed_dir: data/processed/bgl_synth
+  train_split: train
+  validation_split: validation
+  test_split: test
+  num_workers: 0
+  pin_memory: true
+
+model_config: configs/model/sdhtg.yaml
+output_dir: outputs/bgl_synth/main
+seed: 42
+seeds: [42, 123]
+
+deterministic: false
+batch_size: 2048
+mask_template_prob: 0.0
+max_epochs: 30
+pretrain_epochs: 0
+learning_rate: 0.0001
+pretrain_learning_rate: 0.0001
+weight_decay: 0.00001
+amp: true
+grad_clip_norm: 5.0
+grad_accumulation_steps: 1
+patience: 8
+minimum_delta: 0.0001
+monitor: auprc
+monitor_mode: max
+
+threshold:
+  objective: f1
+  grid_size: 2001
+  minimum_recall: null
+
+curriculum:
+  warmup_epochs: 3
+  boundary_initial_temperature: 1.0
+  boundary_final_temperature: 0.10
+  film_initial_strength: 0.0
+  film_final_strength: 1.0
+  boundary_loss_warmup_epochs: 5
+
+loss:
+  effective_number_beta: 0.9999
+  focal_gamma: 2.0
+  label_smoothing: 0.0
+  classification_weight: 1.0
+  prototype_weight: 0.05
+  boundary_weight: 0.01
+  hierarchy_weight: 0.0
+  contrastive_weight: 0.10
+  prototype_margin: 0.5
+  action_boundary_rate: 0.1
+  entity_boundary_rate: 0.05
+  boundary_entropy_weight: 1.0
+  boundary_rate_weight: 1.0
+  boundary_aux_weight: 0.1
+  prototype_temperature: 0.10
+  prototype_diversity_weight: 0.1
+  prototype_balance_weight: 0.1
+
+contrastive:
+  temperature: 0.07
+  projection_dim: 128
+  dropout_probability: 0.10
+  token_mask_probability: 0.10
+  time_jitter_std: 0.05
+  hard_negative_k: 64
+
+pretrain_protocol: normal_only
+pretrain_patience: 5
+pretrain_minimum_delta: 0.0001

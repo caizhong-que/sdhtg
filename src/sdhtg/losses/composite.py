@@ -6,6 +6,7 @@ from torch import Tensor, nn
 from .class_balanced import classification_loss
 from .prototype import prototype_balance_loss, prototype_margin_loss
 from .boundary import boundary_regularization
+import torch.nn.functional as F
 from ..models.config import AblationConfig
 
 
@@ -20,8 +21,16 @@ class CompositeLoss(nn.Module):
         super().__init__(); self.config=config; self.ablation_config=ablation_config
         self.register_buffer("class_counts", torch.as_tensor(class_counts, dtype=torch.float32))
 
-    def forward(self, output, labels: Tensor, contrastive_loss: Tensor | None = None,
-                boundary_scale: float = 1.0) -> CompositeLossOutput:
+    def forward(
+        self,
+        output,
+        labels: Tensor,
+        contrastive_loss: Tensor | None = None,
+        boundary_scale: float = 1.0,
+        action_change: Tensor | None = None,
+        entity_change: Tensor | None = None,
+        template_id: Tensor | None = None,
+    ) -> CompositeLossOutput:
         c=self.config
         # Samples with label == -1 are unlabeled (label-scarcity protocol):
         # they contribute to boundary/self-supervised terms but not to the
@@ -71,9 +80,37 @@ class CompositeLoss(nn.Module):
             boundary_total=(c["boundary_entropy_weight"]*boundary["entropy"]
                 +c["boundary_rate_weight"]*boundary["rate"])
             hierarchy_loss = output.anomaly_logit.sum() * 0.0
+            # Semantic-change auxiliary supervision: pull the soft boundaries
+            # toward the action/entity change indicators so boundary learning
+            # does not collapse under weak supervision alone.
+            aux_weight = float(c.get("boundary_aux_weight", 0.0))
+            if aux_weight > 0.0 and template_id is not None:
+                valid = output.status_node_mask.to(action_change.dtype)
+                # Template change is the most informative semantic-change
+                # signal on BGL-like data (action semantics are ~96% UNK).
+                shifted = torch.cat(
+                    (template_id[:, :1], template_id[:, :-1]), dim=1
+                )
+                template_change = (
+                    template_id != shifted
+                ).to(output.action_boundary.dtype)
+                action_target = template_change * valid
+                entity_target = entity_change.to(output.entity_boundary.dtype)
+                aux = F.binary_cross_entropy(
+                    output.action_boundary, action_target,
+                    weight=valid, reduction="sum",
+                ) + F.binary_cross_entropy(
+                    output.entity_boundary, entity_target,
+                    weight=valid, reduction="sum",
+                )
+                aux = aux / valid.sum().clamp_min(1.0)
+                boundary_total = boundary_total + aux_weight * aux
+            else:
+                aux = output.anomaly_logit.sum() * 0.0
         else:
             boundary_total = output.anomaly_logit.sum() * 0.0
             hierarchy_loss = output.anomaly_logit.sum() * 0.0
+            aux = output.anomaly_logit.sum() * 0.0
         contrastive = output.anomaly_logit.sum()*0 if contrastive_loss is None else contrastive_loss
         total=(c["classification_weight"]*classification
             +c["prototype_weight"]*prototype
@@ -82,6 +119,6 @@ class CompositeLoss(nn.Module):
             +boundary_scale*c.get("hierarchy_weight", 0.0)*hierarchy_loss
             +c["contrastive_weight"]*contrastive)
         parts={"classification":classification,"prototype":prototype,"diversity":diversity,
-               "boundary":boundary_total,"hierarchy":hierarchy_loss,
+               "boundary":boundary_total,"hierarchy":hierarchy_loss,"boundary_aux":aux,
                "contrastive":contrastive}
         return CompositeLossOutput(total, parts)
