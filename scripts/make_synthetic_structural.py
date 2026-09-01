@@ -105,14 +105,22 @@ def main() -> None:
 
     def build_sequence(
         entries: list[tuple[str, list[pd.Series]]],
-    ) -> tuple[list[pd.Series], list[int]]:
-        """Normal: original session. Anomalous: insert B into A."""
+    ) -> tuple[list[pd.Series], list[int]] | None:
+        """Anomalous: insert B into A with a SAME-ENTITY partner.
+
+        Same-entity swaps keep the entity constant at the junctions so simple
+        entity-change heuristics cannot localize the swap; the learned boundary
+        network must rely on its own structural evidence (plus supervision on
+        the semi-synthetic subset). Returns None when no same-entity partner
+        exists.
+        """
         a_entity, a_rows = entries[0]
         same = [e for e in entries[1:] if e[0] == a_entity]
-        pool = same if same else entries[1:]
-        candidates = rng.sample(pool, min(len(pool), 10))
-        # Prefer junctions that align with action changes so the semantic
-        # change prior/auxiliary supervision can localize the swap.
+        if not same:
+            return None
+        candidates = rng.sample(same, min(len(same), 10))
+        # Prefer junctions that do NOT align with template changes, so the
+        # swap is not trivially localizable by a template-change heuristic.
         for _, b_rows in candidates:
             for split in range(1, len(a_rows)):
                 if (
@@ -120,6 +128,10 @@ def main() -> None:
                     != str(b_rows[0].action_sem)
                     and str(b_rows[-1].action_sem)
                     != str(a_rows[split].action_sem)
+                    and str(a_rows[split - 1].template)
+                    == str(b_rows[0].template)
+                    and str(b_rows[-1].template)
+                    == str(a_rows[split].template)
                 ):
                     sequence = a_rows[:split] + b_rows + a_rows[split:]
                     return sequence, [split, split + len(b_rows)]
@@ -184,11 +196,16 @@ def main() -> None:
     for index in range(half):
         a_entry = shuffled[index]
         # Pair with another entry, avoiding identity.
-        partner = shuffled[(index + half) % len(shuffled)]
-        if partner is a_entry:
-            partner = shuffled[(index + 1) % len(shuffled)]
-        sequence, junctions = build_sequence([a_entry, partner])
-        add_sample(sequence, 1, junctions)
+        for offset in range(1, len(shuffled)):
+            partner = shuffled[(index + offset) % len(shuffled)]
+            if partner is a_entry:
+                continue
+            built = build_sequence([a_entry, partner])
+            if built is None:
+                continue
+            sequence, junctions = built
+            add_sample(sequence, 1, junctions)
+            break
 
     frame = pd.DataFrame(records)
     rng.shuffle(records)
