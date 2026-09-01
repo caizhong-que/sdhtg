@@ -138,17 +138,20 @@ class CompositeLoss(nn.Module):
                     supervision.to(output.action_boundary.device)
                     / valid.sum().clamp_min(1.0)
                 )
-                boundary_total = boundary_total + super_weight * supervision
+            else:
+                supervision = output.anomaly_logit.sum() * 0.0
         else:
             boundary_total = output.anomaly_logit.sum() * 0.0
             hierarchy_loss = output.anomaly_logit.sum() * 0.0
             aux = output.anomaly_logit.sum() * 0.0
+            supervision = output.anomaly_logit.sum() * 0.0
         contrastive = output.anomaly_logit.sum()*0 if contrastive_loss is None else contrastive_loss
         total=(c["classification_weight"]*classification
             +c["prototype_weight"]*prototype
             +diversity
             +boundary_scale*c["boundary_weight"]*boundary_total
             +boundary_scale*c.get("boundary_aux_weight", 0.0)*aux
+            +boundary_scale*c.get("boundary_supervision_weight", 0.0)*supervision
             +boundary_scale*c.get("hierarchy_weight", 0.0)*hierarchy_loss
             +c["contrastive_weight"]*contrastive)
         parts={"classification":classification,"prototype":prototype,"diversity":diversity,
