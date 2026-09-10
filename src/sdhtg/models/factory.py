@@ -4,9 +4,11 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping
 
+import torch
 import yaml
 
 from .config import SDHTGModelConfig
+from .baselines import FlatGraphBaseline, TCNBaseline, TransformerBaseline
 from .sdhtg import SDHTG
 
 
@@ -41,5 +43,12 @@ def load_model_config(
 def build_model(
     path: str | Path,
     overrides: Mapping[str, Any] | None = None,
-) -> SDHTG:
-    return SDHTG(load_model_config(path, overrides))
+) -> torch.nn.Module:
+    config = load_model_config(path, overrides)
+    if config.arch == "tcn":
+        return TCNBaseline(config)
+    if config.arch == "transformer":
+        return TransformerBaseline(config)
+    if config.arch == "gnn_flat":
+        return FlatGraphBaseline(config)
+    return SDHTG(config)

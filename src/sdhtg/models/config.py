@@ -100,6 +100,8 @@ class SDHTGModelConfig:
     action_vocab_size: int
     status_vocab_size: int
 
+    arch: str = "sdhtg"
+
     hidden_dim: int = 256
     strategy_dim: int = 64
     time_dim: int = 32
@@ -161,6 +163,10 @@ class SDHTGModelConfig:
             raise ValueError("dropout must be in [0, 1)")
         if self.num_normal_prototypes <= 0:
             raise ValueError("num_normal_prototypes must be positive")
+        if self.arch not in {"sdhtg", "tcn", "transformer", "gnn_flat"}:
+            raise ValueError(
+                f"arch must be sdhtg/tcn/transformer/gnn_flat, got {self.arch!r}"
+            )
         if self.detector_pool_temperature <= 0:
             raise ValueError("detector_pool_temperature must be positive")
         for level in ("status", "action", "entity"):

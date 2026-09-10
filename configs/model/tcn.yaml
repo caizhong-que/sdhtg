@@ -1,0 +1,27 @@
+model:
+  arch: tcn
+  template_vocab_size: 4096
+  entity_vocab_size: 1024
+  action_vocab_size: 1024
+  status_vocab_size: 4096
+  hidden_dim: 256
+  strategy_dim: 64
+  time_dim: 32
+  num_gru_layers: 2
+  graph_layers: 2
+  graph_heads: 4
+  dropout: 0.10
+  num_normal_prototypes: 8
+  prototype_temperature: 0.10
+  prototype_similarity_threshold: 0.2
+  detector_pool_temperature: 0.20
+  ablation:
+    use_hierarchy: false
+    use_strategy_film: false
+    use_prototypes: true
+  boundary:
+    mode: learned
+    force_first_boundary: true
+  hierarchy:
+    membership_epsilon: 1.0e-6
+    minimum_node_mass: 1.0e-5
