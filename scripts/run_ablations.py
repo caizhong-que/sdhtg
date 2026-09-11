@@ -72,6 +72,16 @@ GROUP_DEFAULTS = {
     "boundary": (["hdfs", "ssh"], [42, 123, 256, 512, 1024]),
 }
 
+# Variants whose resolved model config is identical to the main model, i.e.
+# already produced by the ladder (ladder_full/L7) with the same protocol.
+# They are the reference rows of the paper tables and are NOT re-run unless
+# --include-reference is passed.
+REFERENCE_VARIANTS = {
+    "shortcuts": {"full"},
+    "imbalance": {"cb_focal", "multi_prototype"},
+    "boundary": {"full"},
+}
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -80,6 +90,11 @@ def main() -> None:
     parser.add_argument("--seeds", nargs="+", type=int, default=None)
     parser.add_argument("--variants", nargs="+", default=None)
     parser.add_argument("--max-epochs", type=int, default=30)
+    parser.add_argument(
+        "--include-reference", action="store_true",
+        help="also re-run variants identical to the main model "
+             "(reference rows already available from ladder_full/L7)",
+    )
     args = parser.parse_args()
 
     default_datasets, default_seeds = GROUP_DEFAULTS[args.group]
@@ -89,6 +104,16 @@ def main() -> None:
     if args.variants:
         wanted = set(args.variants)
         variants = [v for v in variants if v[0] in wanted]
+    skipped = set()
+    if not args.include_reference:
+        skipped = REFERENCE_VARIANTS.get(args.group, set())
+        variants = [v for v in variants if v[0] not in skipped]
+        if skipped:
+            print(
+                "reference variant(s) "
+                f"{sorted(skipped)} reuse ladder_full/L7 (identical config, "
+                "same protocol); pass --include-reference to re-run them"
+            )
 
     environment = os.environ.copy()
     environment["TQDM_DISABLE"] = "1"
