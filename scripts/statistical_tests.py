@@ -31,8 +31,18 @@ except Exception:  # pragma: no cover
     scipy_stats = None
 
 
-def load_per_seed(method_dir: Path) -> dict[int, float]:
+METRIC_KEYS = {
+    "test_auprc": "auprc",
+    "test_auroc": "auroc",
+    "test_f1": "f1",
+    "test_precision": "precision",
+    "test_recall": "recall",
+}
+
+
+def load_per_seed(method_dir: Path, metric: str = "test_auprc") -> dict[int, float]:
     """Load {seed: metric} for one method directory."""
+    key = METRIC_KEYS.get(metric, metric)
     values: dict[int, float] = {}
     for seed_dir in sorted(method_dir.glob("seed_*")):
         seed = int(seed_dir.name.replace("seed_", ""))
@@ -41,7 +51,9 @@ def load_per_seed(method_dir: Path) -> dict[int, float]:
             continue
         payload = json.loads(result_path.read_text(encoding="utf-8"))
         test = payload.get("test") or {}
-        values[seed] = float(test["auprc"])
+        if key not in test:
+            continue
+        values[seed] = float(test[key])
     return values
 
 
@@ -81,7 +93,7 @@ def main() -> None:
         raise SystemExit("scipy is required for Wilcoxon tests")
 
     root = Path(args.root)
-    baseline_values = load_per_seed(root / args.baseline)
+    baseline_values = load_per_seed(root / args.baseline, args.metric)
     baseline_keys = sorted(baseline_values)
     baseline_arr = np.asarray([baseline_values[k] for k in baseline_keys])
     print(
@@ -94,7 +106,7 @@ def main() -> None:
 
     p_values, names = [], []
     for method in args.methods:
-        values = load_per_seed(root / method)
+        values = load_per_seed(root / method, args.metric)
         common = [k for k in baseline_keys if k in values]
         if len(common) < 2:
             print(f"{method:<24} insufficient paired seeds")
