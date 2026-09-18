@@ -1,0 +1,50 @@
+# Candidate main model: learned nested hierarchy + prototypes + FiLM,
+# WITHOUT the graph edge modules (temporal / semantic / cross-level), which
+# the ladder showed to be harmful on HDFS and neutral-to-mixed on SSH.
+model:
+  template_vocab_size: 4096
+  entity_vocab_size: 1024
+  action_vocab_size: 1024
+  status_vocab_size: 4096
+  hidden_dim: 256
+  strategy_dim: 64
+  time_dim: 32
+  num_gru_layers: 2
+  graph_layers: 2
+  graph_heads: 4
+  dropout: 0.10
+  num_normal_prototypes: 8
+  prototype_temperature: 0.10
+  prototype_similarity_threshold: 0.2
+  detector_pool_temperature: 0.20
+  ablation:
+    use_template_source: true
+    use_entity_source: true
+    use_action_source: true
+    use_status_source: true
+    use_time_source: true
+    use_strategy_film: true
+    use_hierarchy: true
+    use_action_boundary: true
+    use_entity_boundary: true
+    use_temporal_edges: false
+    use_semantic_edges: false
+    use_cross_level_messages: false
+    use_prototypes: true
+    detach_boundary_from_graph: false
+    single_boundary: false
+    independent_boundaries: false
+    hard_edge_weight: false
+  boundary:
+    mode: learned
+    initial_temperature: 1.0
+    final_temperature: 0.10
+    minimum_temperature: 0.05
+    prior_logit_scale: 1.0
+    force_first_boundary: true
+  hierarchy:
+    membership_epsilon: 1.0e-6
+    minimum_node_mass: 1.0e-5
+    edge_minimum_weight: 1.0e-6
+    max_edges_per_target: 10
+    normalize_membership: true

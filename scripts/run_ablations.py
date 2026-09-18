@@ -64,12 +64,19 @@ GROUPS: dict[str, list[tuple[str, str, list[str]]]] = {
         ("hard_action", "configs/model/rq2_hard_action.yaml", []),
         ("hard_entity", "configs/model/rq2_hard_entity.yaml", []),
     ],
+    # Candidate main-model configurations derived from the ladder findings
+    # (used to decide the final architecture, not for the ablation table).
+    "candidates": [
+        ("nograph", "configs/model/cand_nograph.yaml", []),
+        ("full_reference", "configs/model/sdhtg.yaml", []),
+    ],
 }
 
 GROUP_DEFAULTS = {
     "shortcuts": (["hdfs", "ssh"], [42, 123, 256, 512, 1024]),
-    "imbalance": (["hdfs"], [42, 123, 256]),
+    "imbalance": (["hdfs", "ssh"], [42, 123, 256]),
     "boundary": (["hdfs", "ssh"], [42, 123, 256, 512, 1024]),
+    "candidates": (["hdfs", "ssh"], [42, 123, 256, 512, 1024]),
 }
 
 # Variants whose resolved model config is identical to the main model, i.e.
@@ -80,6 +87,7 @@ REFERENCE_VARIANTS = {
     "shortcuts": {"full"},
     "imbalance": {"cb_focal", "multi_prototype"},
     "boundary": {"full"},
+    "candidates": {"full_reference"},
 }
 
 
