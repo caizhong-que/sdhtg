@@ -317,6 +317,11 @@ class FlatGraphBaseline(nn.Module):
         mask = batch["mask"]
         values, gates = self.features(batch)
         temporal_edges, semantic_edges_list = self._edges(batch)
+        edge_total = sum(
+            int(edge_index.shape[1])
+            for group in (temporal_edges, semantic_edges_list)
+            for edge_index, _ in group
+        )
         # Encode each sample separately so edge indices stay local.
         encoded = []
         for index in range(mask.shape[0]):
@@ -345,7 +350,7 @@ class FlatGraphBaseline(nn.Module):
             anomaly_logit = logit
         return _output(
             self.config, anomaly_logit, logit, embedding, distances, distance,
-            nearest, diversity, gates, batch,
+            nearest, diversity, gates, batch, graph_edge_count=edge_total,
         )
 
 
@@ -360,6 +365,7 @@ def _output(
     diversity: Tensor,
     gates: Tensor,
     batch: dict[str, Tensor],
+    graph_edge_count: int = 0,
 ) -> SDHTGOutput:
     """Package baseline outputs in the SDHTG output convention."""
     mask = batch["mask"]
@@ -397,4 +403,5 @@ def _output(
         action_node_mask=torch.zeros_like(mask),
         entity_node_mask=torch.zeros_like(mask),
         graph_batch=None,
+        graph_edge_count=graph_edge_count,
     )

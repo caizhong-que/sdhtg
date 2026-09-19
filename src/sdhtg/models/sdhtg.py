@@ -47,6 +47,7 @@ class SDHTGOutput:
     entity_node_mask: Tensor
 
     graph_batch: Any
+    graph_edge_count: int = 0
 
     def as_loss_dict(self) -> dict[str, Tensor]:
         return {

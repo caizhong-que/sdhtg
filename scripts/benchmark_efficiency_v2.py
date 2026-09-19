@@ -52,7 +52,7 @@ def synthetic_batch(batch_size: int, steps: int, device: torch.device) -> dict:
 def graph_edges(output) -> int:
     graph = getattr(output, "graph_batch", None)
     if graph is None:
-        return 0
+        return int(getattr(output, "graph_edge_count", 0))
     total = 0
     for store in getattr(graph, "edge_stores", []):
         index = getattr(store, "edge_index", None)
