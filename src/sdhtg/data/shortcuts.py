@@ -31,12 +31,18 @@ def shuffle_entity_ids(
     """Permute entity IDs while preserving their frequency distribution."""
     if entity_vocab_size <= 2:
         return
-    generator = torch.Generator(device=batch["entity_id"].device)
+    # Permute only the non-special ids and keep PAD (0) / UNK (1) fixed.
+    # Assigning permutation[0] = 0 afterwards would break the bijection (two
+    # ids would collide and two others would disappear), so the special ids
+    # are excluded from the permutation instead.
+    generator = torch.Generator(device="cpu")
     generator.manual_seed(seed)
-    permutation = torch.randperm(entity_vocab_size, generator=generator)
-    # Keep PAD (0) and UNK (1) stable.
-    permutation[0] = 0
-    permutation[1] = 1
+    special = torch.arange(2)
+    rest = torch.arange(2, entity_vocab_size)
+    shuffled_rest = rest[torch.randperm(rest.numel(), generator=generator)]
+    permutation = torch.cat((special, shuffled_rest)).to(
+        batch["entity_id"].device
+    )
     batch["entity_id"] = permutation[batch["entity_id"]]
 
 
