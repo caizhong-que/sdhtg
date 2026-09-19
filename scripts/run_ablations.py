@@ -103,6 +103,10 @@ def main() -> None:
         help="also re-run variants identical to the main model "
              "(reference rows already available from ladder_full/L7)",
     )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="only list the runs that would be executed (skips finished ones)",
+    )
     args = parser.parse_args()
 
     default_datasets, default_seeds = GROUP_DEFAULTS[args.group]
@@ -125,6 +129,7 @@ def main() -> None:
 
     environment = os.environ.copy()
     environment["TQDM_DISABLE"] = "1"
+    pending = 0
 
     for dataset in datasets:
         config_path = Path(f"configs/experiment/{dataset}.yaml")
@@ -142,6 +147,10 @@ def main() -> None:
             for seed in seeds:
                 if (output_dir / f"{tag}/seed_{seed}/result.json").is_file():
                     print(f"== {dataset} {name} seed {seed}: cached")
+                    continue
+                if args.dry_run:
+                    pending += 1
+                    print(f"== {dataset} {name} seed {seed}: PENDING")
                     continue
                 print(f"== {dataset} {name} seed {seed}: running", flush=True)
                 code = subprocess.call(
@@ -161,7 +170,10 @@ def main() -> None:
                 )
                 if code != 0:
                     print(f"!! {dataset} {name} seed {seed} failed ({code})")
-    print(f"ablation group {args.group} finished")
+    if args.dry_run:
+        print(f"[dry-run] group {args.group}: {pending} runs pending")
+    else:
+        print(f"ablation group {args.group} finished")
 
 
 if __name__ == "__main__":
