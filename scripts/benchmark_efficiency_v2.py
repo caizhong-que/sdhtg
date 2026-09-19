@@ -121,27 +121,50 @@ def measure(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--models", nargs="+", default=list(MODEL_CONFIGS))
-    parser.add_argument("--lengths", default=",".join(map(str, DEFAULT_LENGTHS)))
     parser.add_argument(
-        "--batch-sizes", default=",".join(map(str, DEFAULT_BATCH_SIZES))
+        "--lengths", nargs="+", default=[str(x) for x in DEFAULT_LENGTHS],
+        help="sequence lengths; accepts '32,64' or '32 64'",
+    )
+    parser.add_argument(
+        "--batch-sizes", nargs="+",
+        default=[str(x) for x in DEFAULT_BATCH_SIZES],
     )
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--out", default="outputs/efficiency_benchmark.json")
+    parser.add_argument(
+        "--skip-existing", action="store_true",
+        help="reuse (model, length) entries already present in --out",
+    )
     args = parser.parse_args()
 
-    lengths = [int(x) for x in args.lengths.split(",")]
-    batch_sizes = [int(x) for x in args.batch_sizes.split(",")]
+    def to_ints(values: list[str]) -> list[int]:
+        return [int(x) for chunk in values for x in str(chunk).split(",") if x]
+
+    lengths = to_ints(args.lengths)
+    batch_sizes = to_ints(args.batch_sizes)
     assert len(lengths) == len(batch_sizes), "lengths and batch sizes must pair up"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     results: dict[str, dict] = {}
+    out_path = Path(args.out)
+    if args.skip_existing and out_path.is_file():
+        results = json.loads(out_path.read_text(encoding="utf-8"))
+        results = {
+            model: {int(k): v for k, v in entries.items()}
+            for model, entries in results.items()
+        }
+        print(f"reusing {out_path} ({sum(len(v) for v in results.values())} entries)")
+
     for name in args.models:
         config_path = MODEL_CONFIGS.get(name)
         if config_path is None or not Path(config_path).is_file():
             print(f"!! unknown model {name}")
             continue
         for steps, batch_size in zip(lengths, batch_sizes):
+            if steps in results.get(name, {}):
+                print(f"{name:<12} T={steps:<4} cached")
+                continue
             try:
                 model = build_model(config_path).to(device)
                 metrics = measure(
@@ -173,7 +196,6 @@ def main() -> None:
             if device.type == "cuda":
                 torch.cuda.empty_cache()
 
-    out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
     print(f"\nsaved to {out_path}")
