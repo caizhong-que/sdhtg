@@ -90,6 +90,20 @@ def main() -> None:
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--samples", type=int, default=512)
     parser.add_argument("--split", default="train")
+    parser.add_argument(
+        "--length-range",
+        default=None,
+        help="restrict to sessions with LOW,HIGH events (reproduces a real "
+             "BucketBatchSampler bucket, e.g. 17,64)",
+    )
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument(
+        "--torch-profile",
+        type=int,
+        default=0,
+        help="profile N forward iterations with torch.profiler and print the "
+             "top CUDA kernels by device time",
+    )
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument(
@@ -112,7 +126,22 @@ def main() -> None:
         load_checkpoint(model, Path(args.checkpoint), device)
 
     dataset = SessionDataset(str(processed / "sessions.parquet"), args.split)
-    indices = list(range(min(args.samples, len(dataset))))
+    if args.length_range:
+        low, high = (int(x) for x in args.length_range.split(","))
+        import pandas as pd
+
+        frame = pd.read_parquet(
+            processed / "sessions.parquet", columns=["split", "length"]
+        )
+        mask = (
+            (frame["split"] == args.split)
+            & (frame["length"] > low)
+            & (frame["length"] <= high)
+        )
+        candidates = [int(i) for i in frame.index[mask]]
+        indices = candidates[: args.batch_size]
+    else:
+        indices = list(range(min(args.samples, len(dataset))))
     batch = move_batch_to_device(
         collate_sessions([dataset[i] for i in indices]), device
     )
@@ -120,6 +149,19 @@ def main() -> None:
     bucket: dict[str, list[float]] = {}
     node_counts: dict[str, float] = {}
     edge_counts: dict[tuple[str, str, str], int] = {}
+
+    if args.torch_profile:
+        from torch.profiler import ProfilerActivity, profile
+
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            record_shapes=False,
+        ) as prof:
+            for _ in range(args.torch_profile):
+                model(batch)
+        print("\ntop CUDA kernels by device time")
+        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=15))
+        return
 
     repeats = args.repeat
     # no_grad (not inference_mode) so tensors stay usable for the optional
@@ -236,7 +278,13 @@ def main() -> None:
         level = getattr(hierarchy_output, node_type)
         counts = level.mask.sum(dim=1).cpu().tolist()
         ids = level.semantic_id.detach().cpu()
+        participating = sum(1 for count in counts if int(count) >= 2)
+        multi_node = sum(1 for count in counts if int(count) >= 2)
+        print(f"  {node_type:<8} nodes/session={sum(counts)/max(len(counts),1):6.2f}  "
+              f"sessions with >=2 nodes={multi_node}/{len(counts)} "
+              f"(the rest skip the per-session graph loops)")
         groups = 0
+        runs = 0
         large = 0
         max_m = 0
         sum_sq = 0
@@ -250,6 +298,7 @@ def main() -> None:
                 continue
             _, sizes = torch.unique_consecutive(torch.sort(values).values,
                                                 return_counts=True)
+            runs += int(sizes.numel())
             for size in sizes.tolist():
                 if size < 2:
                     continue
@@ -257,8 +306,8 @@ def main() -> None:
                 large += int(size >= 64)
                 max_m = max(max_m, int(size))
                 sum_sq += int(size) * int(size)
-        print(f"  {node_type:<8} sum(m^2)={sum_sq:>10}  groups(m>=2)={groups:>6}  "
-              f"max_group={max_m:>4}  groups>=64={large}")
+        print(f"  {node_type:<8} runs={runs:>7}  groups(m>=2)={groups:>6}  "
+              f"sum(m^2)={sum_sq:>9}  max_group={max_m:>4}  groups>=64={large}")
 
     print("\nnodes per level (whole batch)")
     for node_type in NODE_TYPES:
@@ -273,6 +322,48 @@ def main() -> None:
         print(f"  {edge_type[0]:>6} -{edge_type[1]:<13}-> {edge_type[2]:<6} "
               f"{count:>10}")
     print(f"  {'TOTAL':<32} {total_edges:>10}")
+
+    kpt = model.config.hierarchy.max_edges_per_target
+    min_weight = model.config.hierarchy.edge_minimum_weight
+    print("\nmembership numerics (soft_segment_membership output)")
+    for name, tensor in (
+        ("status->action", hierarchy_output.status_to_action),
+        ("action->entity", hierarchy_output.action_to_entity),
+    ):
+        finite = torch.isfinite(tensor)
+        print(f"  {name:<16} max={tensor[finite].max().item():.3e}  "
+              f"inf={int((tensor == float('inf')).sum().item())}  "
+              f"nan={int(torch.isnan(tensor).sum().item())}  "
+              f"nonzero_frac={(tensor > min_weight).float().mean().item():.4f}")
+
+    print("\ncontainment candidates (cost of containment_edges)")
+    for name, membership, src_level, tgt_level in (
+        ("status->action", hierarchy_output.status_to_action,
+         hierarchy_output.status, hierarchy_output.action),
+        ("action->entity", hierarchy_output.action_to_entity,
+         hierarchy_output.action, hierarchy_output.entity),
+    ):
+        src_counts = src_level.mask.sum(dim=1).cpu().tolist()
+        tgt_counts = tgt_level.mask.sum(dim=1).cpu().tolist()
+        pairs = 0
+        nonzero = 0
+        topk_sessions = 0
+        used_sessions = 0
+        for index, (s, t) in enumerate(zip(src_counts, tgt_counts)):
+            s = int(s)
+            t = int(t)
+            if s == 0 or t == 0:
+                continue
+            used_sessions += 1
+            weights = membership[index, :s, :t]
+            pairs += s * t
+            nonzero += int((weights > min_weight).sum().item())
+            if kpt > 0 and kpt < s:
+                topk_sessions += 1
+        share = 100.0 * nonzero / max(pairs, 1)
+        print(f"  {name:<16} candidate pairs={pairs:>8}  above eps={nonzero:>8} "
+              f"({share:5.1f}%)  top-K branch in {topk_sessions}/{used_sessions} sessions")
+
     print("\nstage wall-clock (ms, mean of recorded repeats)")
     for label, values in sorted(bucket.items(), key=lambda kv: -sum(kv[1])):
         mean_ms = sum(values) / len(values)
