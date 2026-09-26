@@ -24,6 +24,32 @@ from sdhtg.training.trainer import Trainer
 logger = logging.getLogger("sdhtg")
 
 
+def _parse_assignment(assignment: str) -> tuple[str, object]:
+    """Parse a ``key=value`` CLI override; the value is YAML-decoded."""
+    if "=" not in assignment:
+        raise ValueError(f"override must look like key=value, got {assignment!r}")
+    key, raw = assignment.split("=", 1)
+    key = key.strip()
+    if not key:
+        raise ValueError(f"override is missing a key: {assignment!r}")
+    return key, yaml.safe_load(raw)
+
+
+def _set_dotted(mapping: dict, dotted_key: str, value: object) -> None:
+    """Assign ``value`` at a dotted path inside ``mapping`` (created on demand)."""
+    keys = dotted_key.split(".")
+    cursor = mapping
+    for key in keys[:-1]:
+        child = cursor.get(key)
+        if child is None:
+            child = {}
+            cursor[key] = child
+        if not isinstance(child, dict):
+            raise ValueError(f"override path crosses a scalar at {key!r}")
+        cursor = child
+    cursor[keys[-1]] = value
+
+
 class BucketBatchSampler(Sampler):
     """Groups indices by quantized length; shorter sequences use larger batches."""
     BUCKET_KEYS = [1, 2, 3, 4, 8, 16, 32, 64, 128, 256, 512]
@@ -169,9 +195,28 @@ def main() -> None:
     parser.add_argument("--pretrain-only", action="store_true")
     parser.add_argument("--load-pretrained", type=str,
                         help="load pretrained model weights and skip pretraining")
+    parser.add_argument(
+        "--set",
+        dest="config_set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override an experiment-config key (dotted path allowed); repeatable",
+    )
+    parser.add_argument(
+        "--model-set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a model-config key (dotted path allowed, e.g. "
+             "num_normal_prototypes=4); repeatable",
+    )
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    for assignment in args.config_set:
+        key, value = _parse_assignment(assignment)
+        _set_dotted(cfg, key, value)
     if args.max_epochs is not None:
         cfg["max_epochs"] = args.max_epochs
     if args.pretrain_epochs is not None:
@@ -210,6 +255,9 @@ def main() -> None:
         f"{name}_vocab_size": len(vocabulary[name])
         for name in ("template", "entity", "action", "status")
     }
+    for assignment in args.model_set:
+        key, value = _parse_assignment(assignment)
+        overrides[key.removeprefix("model.")] = value
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model(cfg["model_config"], overrides).to(device)
@@ -239,6 +287,31 @@ def main() -> None:
         data_paths=[str(parquet), str(processed / "manifest.json")],
         model=model,
     )
+    if args.config_set or args.model_set:
+        # The manifest hash covers the config files only, so record CLI overrides
+        # separately; the sensitivity sweep (section 6.8) relies on this.
+        (output / "cli_overrides.json").write_text(
+            json.dumps(
+                {
+                    "config_set": args.config_set,
+                    "model_set": args.model_set,
+                    "effective_model_config": {
+                        "num_normal_prototypes": model.config.num_normal_prototypes,
+                        "prototype_temperature": model.config.prototype_temperature,
+                        "prototype_scale_override": model.config.prototype_scale_override,
+                        "boundary": {
+                            "mode": model.config.boundary.mode,
+                            "final_temperature": model.config.boundary.final_temperature,
+                        },
+                        "local_temporal_radius": dict(model.config.local_temporal_radius),
+                        "semantic_neighbors": dict(model.config.semantic_neighbors),
+                        "membership_epsilon": model.config.hierarchy.membership_epsilon,
+                    },
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     pretrain_result = None
     if not args.skip_pretrain and not args.load_pretrained and int(cfg.get("pretrain_epochs", 0)) > 0:
         protocol = args.pretrain_protocol or cfg.get("pretrain_protocol", "normal_only")

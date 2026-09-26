@@ -203,7 +203,13 @@ class HierarchicalAnomalyDetector(nn.Module):
         )
 
         if self.config.ablation.use_prototypes:
-            scale = torch.nn.functional.softplus(self.prototype_scale_logit)
+            if self.config.prototype_scale_override is None:
+                scale = torch.nn.functional.softplus(self.prototype_scale_logit)
+            else:
+                # Fixed lambda_p for the sensitivity sweep (manuscript 6.8).
+                scale = self.prototype_scale_logit.new_tensor(
+                    float(self.config.prototype_scale_override)
+                )
             anomaly_logit = weighted_logit + scale * (
                 prototype_distance - self.prototype_center
             )

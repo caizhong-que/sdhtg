@@ -115,6 +115,10 @@ class SDHTGModelConfig:
     prototype_temperature: float = 0.1
     prototype_similarity_threshold: float = 0.2
     detector_pool_temperature: float = 0.2
+    # Manuscript Eq. 54: lambda_p = softplus(eta_p) is learned by default.
+    # Setting this to a non-negative value fixes lambda_p instead, which is how
+    # the section 6.8 sensitivity sweep varies it.
+    prototype_scale_override: float | None = None
 
     local_temporal_radius: Mapping[str, int] = field(
         default_factory=lambda: {"status": 8, "action": 4, "entity": 2}
@@ -163,6 +167,10 @@ class SDHTGModelConfig:
             raise ValueError("dropout must be in [0, 1)")
         if self.num_normal_prototypes <= 0:
             raise ValueError("num_normal_prototypes must be positive")
+        if self.prototype_scale_override is not None and (
+            self.prototype_scale_override < 0
+        ):
+            raise ValueError("prototype_scale_override must be non-negative")
         if self.arch not in {"sdhtg", "tcn", "transformer", "gnn_flat"}:
             raise ValueError(
                 f"arch must be sdhtg/tcn/transformer/gnn_flat, got {self.arch!r}"
