@@ -408,3 +408,19 @@ DeepLog/LogAnomaly/LogBERT 不在本机复现（依赖 `transformers`、需把�
 staging 到 `~/.dataset` 并重跑各脚本自己的 Drain 预处理，且其协议与本项目
 统一输入协议不可直接比较）。论文改为：引用原始论文在 LogHub 上的报告值并标注
 协议差异，主对照仍用已完成的 75 个统一协议基线（TCN/Transformer/GNN-flat）。
+
+### 10.5 案例研究的数据集选择
+
+L7 五种子测试集错误结构：HDFS 同时存在误报与漏报（如 seed42 P=0.9964 /
+R=0.9952，115,013 个测试样本中约 5 个误报、8 个漏报）；SSH 的精确率在 4/5 个
+种子上为 1.0000（260 个测试样本），阈值下**没有误报**，脚本会标注
+`no_threshold_crossing_false_positive`。因此 6.6 的"正确/误报/漏报"三案例图
+必须用 HDFS，且案例选择要扫描整个测试集（漏报仅 ~0.5%，扫前缀样本会取不到
+漏报案例）。
+
+### 10.6 预训练后自动管线
+
+`run_after_pretrain.bat`（配合 `scripts/wait_for_pretraining.py`）在预训练矩阵
+结束后依次执行：回收 `last.pt` → 6.6 证据（HDFS 3 种子 + SSH 5 种子）→ 参考模型
+原型健康度 → 6.8 敏感性扫描（81 run）。所有步骤都跳过已完成项，可随时中断重跑；
+`--dry-run` 只打印命令，`--skip-wait` 跳过等待。
