@@ -1,19 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-interpret_boundaries.py -- section 6.6 evidence (1): do the learned boundaries
-land where the structural priors say a segment should end?
+interpret_boundaries.py -- section 6.6 evidence (1): what do the learned
+boundary scores encode, and where do they actually cut?
 
-For every valid event the model emits an action-boundary probability and an
-entity-boundary probability. If the soft boundary really tracks structure,
-high probabilities should coincide with action changes, entity changes and
-long inter-event gaps. This script reports, per head:
+Two questions that must not be conflated:
 
-  * AUC of the boundary probability as a predictor of the matching change flag
-    (threshold-free), plus AUC against the other change flag and against gaps;
-  * P(change | p >= 0.5) versus P(change | p <= 0.1);
-  * mean inter-event gap per boundary-probability bin.
+1. Ranking. Does the boundary score order events the way the structural priors
+   would (action change, entity change, long gap)? Reported as AUC and as the
+   top-10% lift over the base rate, both computed on the *pre-temperature*
+   logits. Ranking on the probabilities is meaningless here: at the inference
+   temperature (0.1) a logit of -10 maps to ~5e-44, so every non-forced
+   position underflows to 0 and the probabilities tie.
 
-Outputs a JSON summary and a CSV of the bins for the figure stage.
+2. Decision. Does the model actually place a boundary? Reported as the mean
+   probability, the mean logit and the fraction of positions with logit > 0.
+   A model can rank perfectly and still decide "no internal boundary" if all
+   logits stay negative.
+
+The forced first boundary is excluded from every statistic, because its change
+prior is zero by construction.
 
 Usage:
     python scripts/interpret_boundaries.py \
@@ -25,9 +30,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 
 from _interpret_common import (
     dataset,
@@ -44,7 +51,7 @@ def average_ranks(values: torch.Tensor) -> torch.Tensor:
     values = values.to(torch.float64)
     order = torch.argsort(values, stable=True)
     ordered = values[order]
-    unique, inverse, counts = torch.unique(
+    _, inverse, counts = torch.unique(
         ordered, return_inverse=True, return_counts=True
     )
     starts = torch.cumsum(counts, 0) - counts
@@ -70,84 +77,85 @@ def rank_auc(scores: list[float], labels: list[float]) -> float | None:
     return (rank_sum - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg)
 
 
-def analyse_head(
-    probabilities: list[float],
-    primary_change: list[float],
-    secondary_change: list[float],
-    gaps: list[float],
-    bins: int,
-) -> dict:
-    high = [i for i, p in enumerate(probabilities) if p >= 0.5]
-    low = [i for i, p in enumerate(probabilities) if p <= 0.1]
+def mean_or_none(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def analyse(head: dict[str, list[float]], bins: int) -> dict:
+    """Summarise one boundary head; ``head`` holds the per-event arrays."""
+    scores = head["score"]
+    learned_scores = head["learned_score"]
+    probabilities = head["probability"]
+    primary = head["primary"]
+    secondary = head["secondary"]
+    gaps = head["gap"]
+    total = len(scores)
+    if total == 0:
+        return {"events": 0}
+
+    ordered = sorted(range(total), key=lambda i: -scores[i])
+    top_count = max(1, total // 10)
+    top_indices = ordered[:top_count]
 
     def rate(indices: list[int], values: list[float]) -> float | None:
         if not indices:
             return None
         return sum(values[i] for i in indices) / len(indices)
 
-    bin_edges = [b / bins for b in range(bins + 1)]
-    bin_rows = []
+    base_rate = mean_or_none(primary)
+    top_rate = rate(top_indices, primary)
+
+    # Equal-count deciles on the score so the histogram stays informative even
+    # when the probabilities themselves are all zero.
+    deciles = []
     for index in range(bins):
-        lower, upper = bin_edges[index], bin_edges[index + 1]
-        members = [
-            i
-            for i, p in enumerate(probabilities)
-            if (lower <= p < upper) or (index == bins - 1 and p == upper)
-        ]
-        bin_rows.append(
+        start = index * total // bins
+        end = (index + 1) * total // bins
+        members = ordered[start:end]
+        deciles.append(
             {
-                "lower": lower,
-                "upper": upper,
+                "decile": index + 1,
                 "count": len(members),
-                "mean_gap": rate(members, gaps),
-                "primary_change_rate": rate(members, primary_change),
-                "secondary_change_rate": rate(members, secondary_change),
+                "score_high": scores[members[0]] if members else None,
+                "score_low": scores[members[-1]] if members else None,
+                "mean_score": mean_or_none([scores[i] for i in members]),
+                "mean_probability": mean_or_none([probabilities[i] for i in members]),
+                "mean_gap": mean_or_none([gaps[i] for i in members]),
+                "primary_change_rate": rate(members, primary),
+                "secondary_change_rate": rate(members, secondary),
             }
         )
 
+    positive_logits = [s for s in scores if s > 0.0]
     change_index = [
-        (p, c)
-        for p, c in zip(probabilities, primary_change)
-        if c in (0.0, 1.0)
+        (s, c) for s, c in zip(scores, primary) if c in (0.0, 1.0)
     ]
-
-    # Temperature-free check: among the events the model ranks highest, how
-    # often does the structural prior actually change? Comparing that with the
-    # base rate avoids reading the sharpened sigmoid at tau=0.1 as a decision.
-    ordered = sorted(range(len(probabilities)), key=lambda i: -probabilities[i])
-    top_count = max(1, len(ordered) // 10)
-    top_indices = ordered[:top_count]
-    base_rate = rate(range(len(primary_change)), primary_change)
-    top_rate = rate(top_indices, primary_change)
-
     return {
-        "events": len(probabilities),
-        "mean_probability": (
-            sum(probabilities) / len(probabilities) if probabilities else None
+        "events": total,
+        "mean_score": mean_or_none(scores),
+        "std_score": (
+            math.sqrt(
+                sum((s - mean_or_none(scores)) ** 2 for s in scores)
+                / max(total - 1, 1)
+            )
+            if total > 1
+            else 0.0
         ),
-        "primary_change_rate": rate(range(len(primary_change)), primary_change),
-        "secondary_change_rate": rate(range(len(secondary_change)), secondary_change),
-        "top_decile_primary_change_rate": top_rate,
+        "mean_probability": mean_or_none(probabilities),
+        "fraction_score_positive": len(positive_logits) / total,
+        "auc_score_primary_change": rank_auc(
+            [s for s, _ in change_index], [c for _, c in change_index]
+        ),
+        "auc_learned_score_primary_change": rank_auc(learned_scores, primary),
+        "auc_learned_score_gap": rank_auc(learned_scores, gaps),
+        "auc_probability_primary_change": rank_auc(probabilities, primary),
+        "auc_score_gap": rank_auc(scores, gaps),
+        "primary_change_rate": base_rate,
+        "top_decile_change_rate": top_rate,
         "top_decile_lift": (
             None if (top_rate is None or not base_rate) else top_rate / base_rate
         ),
-        "auc_primary_change": rank_auc(
-            [p for p, _ in change_index], [c for _, c in change_index]
-        ),
-        "auc_secondary_change": rank_auc(probabilities, secondary_change),
-        "auc_gap": rank_auc(probabilities, gaps),
-        "high_p": {
-            "threshold": 0.5,
-            "count": len(high),
-            "primary_change_rate": rate(high, primary_change),
-        },
-        "low_p": {
-            "threshold": 0.1,
-            "count": len(low),
-            "primary_change_rate": rate(low, primary_change),
-        },
-        "primary_change_rate_when_changed": None,
-        "by_bin": bin_rows,
+        "deciles": deciles,
     }
 
 
@@ -168,19 +176,32 @@ def main() -> None:
     data = dataset(context, args.split)
     indices = list(range(min(args.max_samples, len(data))))
     device = default_device(args.device)
+    temperature = float(context.model.config.boundary.final_temperature)
+    boundary_config = context.model.config.boundary
+    action_prior_scale = (
+        boundary_config.prior_logit_scale
+        if boundary_config.action_prior_scale is None
+        else boundary_config.action_prior_scale
+    )
+    entity_prior_scale = (
+        boundary_config.prior_logit_scale
+        if boundary_config.entity_prior_scale is None
+        else boundary_config.entity_prior_scale
+    )
 
-    # The first event of every sample always carries a forced boundary
-    # (force_first_boundary), so those positions are tracked separately: the
-    # interesting question is whether the *learned* boundaries align with the
-    # structural priors.
-    collected = {
-        "action": {"p": [], "primary": [], "secondary": [], "gap": []},
-        "entity": {"p": [], "primary": [], "secondary": [], "gap": []},
+    collected: dict[str, dict[str, list[float]]] = {
+        "action": {
+            key: []
+            for key in ("score", "learned_score", "probability", "primary",
+                        "secondary", "gap")
+        },
+        "entity": {
+            key: []
+            for key in ("score", "learned_score", "probability", "primary",
+                        "secondary", "gap")
+        },
     }
-    learned_only = {
-        "action": {"p": [], "primary": [], "secondary": [], "gap": []},
-        "entity": {"p": [], "primary": [], "secondary": [], "gap": []},
-    }
+
     for _, batch in iter_batches(data, indices, args.batch_size, device):
         result = forward_boundary(context.model, batch)
         boundary = result["boundary"]
@@ -188,34 +209,65 @@ def main() -> None:
         gaps = batch["delta_t"].cpu()
         action_change = batch["action_change"].cpu()
         entity_change = batch["entity_change"].cpu()
-        probabilities = {
-            "action": boundary.action_probability.cpu(),
-            "entity": boundary.entity_probability.cpu(),
-        }
+        action_logit = boundary.action_logit.cpu()
+        conditional_logit = boundary.entity_conditional_logit.cpu()
+        # The prior enters the logit additively, so subtracting the known prior
+        # term isolates what the network itself predicts.
+        action_learned_logit = action_logit - action_prior_scale * (
+            action_change - 0.5
+        )
+        conditional_learned_logit = conditional_logit - entity_prior_scale * (
+            entity_change - 0.5
+        )
+        action_probability = boundary.action_probability.cpu()
+        entity_probability = boundary.entity_probability.cpu()
+        # Composed entity score in log space; the product form
+        # p_entity = sigmoid(a/tau) * sigmoid(c/tau) makes log p additive.
+        entity_log_score = (
+            F.logsigmoid(action_logit / temperature)
+            + F.logsigmoid(conditional_logit / temperature)
+        )
+        entity_learned_log_score = (
+            F.logsigmoid(action_learned_logit / temperature)
+            + F.logsigmoid(conditional_learned_logit / temperature)
+        )
 
         for sample in range(mask.shape[0]):
             length = int(mask[sample].sum().item())
-            for position in range(length):
-                for head, primary, secondary in (
-                    ("action", action_change, entity_change),
-                    ("entity", entity_change, action_change),
-                ):
-                    value = float(probabilities[head][sample, position])
-                    entry = {
-                        "p": value,
-                        "primary": float(primary[sample, position]),
-                        "secondary": float(secondary[sample, position]),
-                        "gap": float(gaps[sample, position]),
-                    }
-                    collected[head]["p"].append(entry["p"])
-                    collected[head]["primary"].append(entry["primary"])
-                    collected[head]["secondary"].append(entry["secondary"])
-                    collected[head]["gap"].append(entry["gap"])
-                    if position > 0:
-                        learned_only[head]["p"].append(entry["p"])
-                        learned_only[head]["primary"].append(entry["primary"])
-                        learned_only[head]["secondary"].append(entry["secondary"])
-                        learned_only[head]["gap"].append(entry["gap"])
+            for position in range(1, length):  # exclude the forced first boundary
+                collected["action"]["score"].append(
+                    float(action_logit[sample, position])
+                )
+                collected["action"]["learned_score"].append(
+                    float(action_learned_logit[sample, position])
+                )
+                collected["action"]["probability"].append(
+                    float(action_probability[sample, position])
+                )
+                collected["action"]["primary"].append(
+                    float(action_change[sample, position])
+                )
+                collected["action"]["secondary"].append(
+                    float(entity_change[sample, position])
+                )
+                collected["action"]["gap"].append(float(gaps[sample, position]))
+
+                collected["entity"]["score"].append(
+                    float(entity_log_score[sample, position])
+                )
+                collected["entity"]["learned_score"].append(
+                    float(entity_learned_log_score[sample, position])
+                )
+                collected["entity"]["probability"].append(
+                    float(entity_probability[sample, position])
+                )
+                collected["entity"]["primary"].append(
+                    float(entity_change[sample, position])
+                )
+                collected["entity"]["secondary"].append(
+                    float(action_change[sample, position])
+                )
+                collected["entity"]["gap"].append(float(gaps[sample, position]))
 
     summary = {
         "run": str(context.root),
@@ -223,34 +275,17 @@ def main() -> None:
         "split": args.split,
         "samples": len(indices),
         "bins": args.bins,
-        "action_boundary": analyse_head(
-            collected["action"]["p"],
-            collected["action"]["primary"],
-            collected["action"]["secondary"],
-            collected["action"]["gap"],
-            args.bins,
+        "boundary_temperature": temperature,
+        "prior_logit_scale": {
+            "action": action_prior_scale,
+            "entity": entity_prior_scale,
+        },
+        "note": (
+            "ranking metrics use pre-temperature scores; probability-based AUC "
+            "ties when the logits underflow at the inference temperature"
         ),
-        "entity_boundary": analyse_head(
-            collected["entity"]["p"],
-            collected["entity"]["primary"],
-            collected["entity"]["secondary"],
-            collected["entity"]["gap"],
-            args.bins,
-        ),
-        "action_boundary_learned_only": analyse_head(
-            learned_only["action"]["p"],
-            learned_only["action"]["primary"],
-            learned_only["action"]["secondary"],
-            learned_only["action"]["gap"],
-            args.bins,
-        ),
-        "entity_boundary_learned_only": analyse_head(
-            learned_only["entity"]["p"],
-            learned_only["entity"]["primary"],
-            learned_only["entity"]["secondary"],
-            learned_only["entity"]["gap"],
-            args.bins,
-        ),
+        "action_boundary": analyse(collected["action"], args.bins),
+        "entity_boundary": analyse(collected["entity"], args.bins),
     }
 
     out_path = Path(args.out) if args.out else (
@@ -263,67 +298,61 @@ def main() -> None:
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(
-            ["head", "scope", "lower", "upper", "count", "mean_gap",
-             "primary_change_rate", "secondary_change_rate"]
+            ["head", "decile", "count", "score_high", "score_low", "mean_score",
+             "mean_probability", "mean_gap", "primary_change_rate",
+             "secondary_change_rate"]
         )
-        for head in ("action", "entity"):
-            for scope, key in (
-                ("all", f"{head}_boundary"),
-                ("learned_only", f"{head}_boundary_learned_only"),
-            ):
-                for row in summary[key]["by_bin"]:
-                    writer.writerow(
-                        [
-                            head,
-                            scope,
-                            f"{row['lower']:.2f}",
-                            f"{row['upper']:.2f}",
-                            row["count"],
-                            "" if row["mean_gap"] is None else f"{row['mean_gap']:.4f}",
-                            "" if row["primary_change_rate"] is None
-                            else f"{row['primary_change_rate']:.4f}",
-                            "" if row["secondary_change_rate"] is None
-                            else f"{row['secondary_change_rate']:.4f}",
-                        ]
-                    )
+        for head_name in ("action", "entity"):
+            for row in summary[f"{head_name}_boundary"]["deciles"]:
+                writer.writerow(
+                    [
+                        head_name,
+                        row["decile"],
+                        row["count"],
+                        _num(row["score_high"]),
+                        _num(row["score_low"]),
+                        _num(row["mean_score"]),
+                        _num(row["mean_probability"], 3e-3),
+                        _num(row["mean_gap"]),
+                        _num(row["primary_change_rate"]),
+                        _num(row["secondary_change_rate"]),
+                    ]
+                )
 
-    for head in ("action", "entity"):
-        for scope, label in (
-            ("all", "all events"),
-            ("learned_only", "excluding forced first boundary"),
-        ):
-            block = summary[f"{head}_boundary_learned_only" if scope == "learned_only"
-                            else f"{head}_boundary"]
-            high = block["high_p"]
-            low = block["low_p"]
-            print(
-                f"[{head} | {label}] events={block['events']} "
-                f"mean_p={_fmt(block['mean_probability'])} "
-                f"change_rate={_fmt(block['primary_change_rate'])}"
-            )
-            print(
-                f"    AUC(p -> {head}_change)={_fmt(block['auc_primary_change'])}  "
-                f"AUC(p -> other_change)={_fmt(block['auc_secondary_change'])}  "
-                f"AUC(p -> gap)={_fmt(block['auc_gap'])}"
-            )
-            print(
-                f"    P(change | p>=0.5)={_fmt(high['primary_change_rate'])} "
-                f"(n={high['count']})   "
-                f"P(change | p<=0.1)={_fmt(low['primary_change_rate'])} "
-                f"(n={low['count']})"
-            )
-            print(
-                f"    top-10% by boundary score: change rate="
-                f"{_fmt(block['top_decile_primary_change_rate'])} vs base rate="
-                f"{_fmt(block['primary_change_rate'])} "
-                f"(lift={_fmt(block['top_decile_lift'])})"
-            )
+    for head_name in ("action", "entity"):
+        block = summary[f"{head_name}_boundary"]
+        if not block.get("events"):
+            continue
+        print(
+            f"[{head_name}] events={block['events']} "
+            f"score(mean/std)={_num(block['mean_score'])}/{_num(block['std_score'])} "
+            f"P(score>0)={block['fraction_score_positive']:.5f} "
+            f"mean_probability={_num(block['mean_probability'], 3e-3)}"
+        )
+        print(
+            f"    AUC(score -> primary change)="
+            f"{_num(block['auc_score_primary_change'])}   "
+            f"AUC(learned component)="
+            f"{_num(block['auc_learned_score_primary_change'])}   "
+            f"AUC(probability -> primary change)="
+            f"{_num(block['auc_probability_primary_change'])}   "
+            f"AUC(score -> gap)={_num(block['auc_score_gap'])}"
+        )
+        print(
+            f"    top-10% change rate={_num(block['top_decile_change_rate'])} vs "
+            f"base={_num(block['primary_change_rate'])} "
+            f"(lift={_num(block['top_decile_lift'])})"
+        )
     print(f"\nwrote {out_path}")
     print(f"wrote {csv_path}")
 
 
-def _fmt(value: float | None) -> str:
-    return "n/a" if value is None else f"{value:.3f}"
+def _num(value: float | None, small: float = 1e-4) -> str:
+    if value is None:
+        return "n/a"
+    if value != 0.0 and abs(value) < small:
+        return f"{value:.2e}"
+    return f"{value:.4f}"
 
 
 if __name__ == "__main__":
