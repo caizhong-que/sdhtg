@@ -78,6 +78,11 @@ echo  STEP 4  section 6.8 sensitivity sweep (81 runs, skip-existing)
 echo ############################################################
 %DRY% %PY% scripts\run_sensitivity.py --datasets ssh --seeds 42 123 256 --prototype-stats
 
+echo ############################################################
+echo  STEP 5  backfill prototype health of runs whose stats were lost
+echo ############################################################
+%DRY% %PY% scripts\backfill_prototype_stats.py --datasets ssh --seeds 42 123 256
+
 echo ALL POST-PRETRAIN STEPS DONE
 echo   evidence     : outputs\<dataset>\main\ladder_full\L7\interpretability\
 echo   sensitivity  : outputs\ssh\main\sens_<group>_<variant>\seed_<s>\

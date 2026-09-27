@@ -170,14 +170,48 @@ def iter_batches(
     indices: Sequence[int],
     batch_size: int,
     device: torch.device,
+    token_budget: int | None = None,
 ) -> Iterator[tuple[list[int], dict[str, torch.Tensor]]]:
-    """Yield ``(row_indices, device_batch)``; row order is preserved."""
-    # Long sessions (SSH averages ~280 events) make the graph tensors large: a
-    # 256-sample CPU batch can ask the host allocator for multi-gigabyte
-    # intermediates, so cap the CPU batch size.
-    effective = min(batch_size, 32) if device.type == "cpu" else batch_size
-    for start in range(0, len(indices), effective):
-        chunk = list(indices[start : start + effective])
+    """Yield ``(row_indices, device_batch)`` grouped by session length.
+
+    Batch size cannot be a constant: SSH averages ~280 events per session while
+    HDFS averages ~19, so a fixed 256-sample batch builds a graph whose edge
+    tensors ask for gigabytes on SSH. Batches are therefore formed under a token
+    budget (samples x padded length), which is what actually bounds the dense
+    membership matrices and the message-passing edge tensors.
+
+    ``batch_size`` stays an upper bound on the number of samples; the returned
+    row indices are grouped by length, so callers must not assume input order.
+    """
+    if token_budget is None:
+        token_budget = 4096 if device.type == "cuda" else 2048
+    lengths = data.lengths
+    ordered = sorted(indices, key=lambda index: int(lengths[index]))
+
+    plan: list[list[int]] = []
+    current: list[int] = []
+    current_max = 0
+    for row in ordered:
+        length = max(int(lengths[row]), 1)
+        candidate_max = max(current_max, length)
+        if current and (len(current) + 1) * candidate_max > token_budget:
+            plan.append(current)
+            current, current_max, candidate_max = [], 0, length
+        current.append(row)
+        current_max = candidate_max
+        if len(current) >= batch_size:
+            plan.append(current)
+            current, current_max = [], 0
+    if current:
+        plan.append(current)
+
+    widest = max((len(batch) for batch in plan), default=0)
+    print(
+        f"[batching] device={device.type} token_budget={token_budget} "
+        f"batches={len(plan)} max_samples_per_batch={widest}",
+        flush=True,
+    )
+    for chunk in plan:
         rows = [data[i] for i in chunk]
         yield chunk, move_batch_to_device(collate_sessions(rows), device)
 
