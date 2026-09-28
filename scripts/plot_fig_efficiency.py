@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _figure_common import (METHOD_COLOR, PALETTE, apply_style, canvas_qa,
-                            legend_overlap_qa, save_pub)
+                            legend_overlap_qa, save_pub, text_overlap_qa)
 
 import matplotlib.pyplot as plt
 
