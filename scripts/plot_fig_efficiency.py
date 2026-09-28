@@ -73,6 +73,8 @@ def main() -> None:
     ax_train.set_xticks(ts)
     ax_train.set_xticklabels([str(v) for v in ts])
     ax_train.set_ylim(15, 3.0e4)
+    ax_train.set_yticks([20, 100, 1000, 10000])
+    ax_train.set_yticklabels(["20", "100", "1000", "10000"])
     ax_train.set_xlabel("sequence length $T$")
     ax_train.set_ylabel("training time / step (ms)")
     ax_train.set_title("(a) training cost", loc="left", fontsize=7.2)
@@ -87,6 +89,8 @@ def main() -> None:
     ax_infer.set_xticks(ts)
     ax_infer.set_xticklabels([str(v) for v in ts])
     ax_infer.set_ylim(0.02, 60.0)
+    ax_infer.set_yticks([0.05, 0.5, 5, 50])
+    ax_infer.set_yticklabels(["0.05", "0.5", "5", "50"])
     ax_infer.set_xlabel("sequence length $T$")
     ax_infer.set_ylabel("inference time / sample (ms)")
     ax_infer.set_title("(b) inference cost", loc="left", fontsize=7.2)
@@ -100,6 +104,7 @@ def main() -> None:
     ax_mem.set_ylabel("peak memory (GB)")
     ax_mem.set_title("(c) peak memory", loc="left", fontsize=7.2)
     ax_mem.set_ylim(0, 13.5)
+    ax_mem.set_yticks([0, 4, 8, 12])
 
     attribution = [
         ("graph construction", 82.0, PALETTE["red_strong"]),
@@ -126,7 +131,7 @@ def main() -> None:
 
     fig.legend(handles, labels, loc="lower center", ncol=5, fontsize=6.0,
                bbox_to_anchor=(0.5, 0.005), handletextpad=0.4, columnspacing=1.1)
-    fig.tight_layout(w_pad=1.6, h_pad=1.4, rect=(0, 0.05, 1, 1))
+    fig.tight_layout(w_pad=1.8, h_pad=2.4, rect=(0, 0.05, 1, 1))
     offenders = canvas_qa(fig) + legend_overlap_qa(fig) + text_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
