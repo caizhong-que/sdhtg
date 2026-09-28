@@ -28,7 +28,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _figure_common import PALETTE, apply_style, canvas_qa, save_pub
+from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
+                            save_pub)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -162,7 +163,7 @@ def main() -> None:
         plt.Line2D([], [], marker="s", ls="none", color=PALETTE["red_strong"], ms=4.0,
                    label="test F1 (reported)"),
     ]
-    ax_sens.legend(handles=handles, fontsize=5.8, loc="lower right", handletextpad=0.4)
+    sensitivity_handles = handles
 
     # (b) parsing-noise robustness
     ax_auprc = ax_noise.twinx()
@@ -204,11 +205,14 @@ def main() -> None:
     markers = plt.Line2D([], [], marker="o", ls="none", mfc="white",
                          mec=PALETTE["blue_main"], mew=0.9, ms=3.6,
                          label="$\\Delta$AUPRC (noise vs clean)")
-    ax_noise.legend(handles=bars + [markers], fontsize=5.6, ncol=2, loc="lower left",
-                    handletextpad=0.4, columnspacing=0.8)
+    noise_handles = bars + [markers]
 
-    fig.subplots_adjust(left=0.185, right=0.90, top=0.93, bottom=0.10)
-    offenders = canvas_qa(fig)
+    fig.legend(sensitivity_handles + noise_handles,
+               [handle.get_label() for handle in sensitivity_handles + noise_handles],
+               loc="lower center", ncol=5, fontsize=5.8,
+               bbox_to_anchor=(0.5, 0.005), handletextpad=0.4, columnspacing=1.0)
+    fig.subplots_adjust(left=0.185, right=0.90, top=0.93, bottom=0.17)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

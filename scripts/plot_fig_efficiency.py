@@ -24,7 +24,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _figure_common import METHOD_COLOR, PALETTE, apply_style, canvas_qa, save_pub
+from _figure_common import (METHOD_COLOR, PALETTE, apply_style, canvas_qa,
+                            legend_overlap_qa, save_pub)
 
 import matplotlib.pyplot as plt
 
@@ -75,7 +76,7 @@ def main() -> None:
     ax_train.set_xlabel("sequence length $T$")
     ax_train.set_ylabel("training time / step (ms)")
     ax_train.set_title("(a) training cost", loc="left", fontsize=7.2)
-    ax_train.legend(fontsize=5.8, ncol=2, handletextpad=0.4, columnspacing=0.8)
+    handles, labels = ax_train.get_legend_handles_labels()
     ax_train.annotate("batch 512:\nmemory-limited",
                       (32, series(benchmark, "sdhtg", "train_ms")[0]),
                       textcoords="offset points", xytext=(6, -14), fontsize=5.6,
@@ -123,8 +124,10 @@ def main() -> None:
     ax_attr.set_xlabel("share of step time at $T=512$ (%)")
     ax_attr.set_title("(d) cost attribution", loc="left", fontsize=7.2)
 
-    fig.tight_layout(w_pad=1.6, h_pad=1.4)
-    offenders = canvas_qa(fig)
+    fig.legend(handles, labels, loc="lower center", ncol=5, fontsize=6.0,
+               bbox_to_anchor=(0.5, 0.005), handletextpad=0.4, columnspacing=1.1)
+    fig.tight_layout(w_pad=1.6, h_pad=1.4, rect=(0, 0.05, 1, 1))
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

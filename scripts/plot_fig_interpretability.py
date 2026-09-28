@@ -32,7 +32,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _figure_common import PALETTE, apply_style, canvas_qa, save_pub
+from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
+                            save_pub)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -131,13 +132,21 @@ def main() -> None:
                   color=LEVEL_COLOR[level], edgecolor="white", linewidth=0.5,
                   label=level)
         bottoms = [b + h for b, h in zip(bottoms, heights)]
+    # Direct labels on the first stack instead of a legend that would sit on the
+    # bars (the stack order is fixed, so the mapping is unambiguous).
+    running = 0.0
+    summary_first = load_hierarchy(root, DATASETS[0][0])["normal"]
+    for level in LEVELS:
+        height = summary_first[level]
+        if height > 0.12:
+            ax_pi.text(0, running + height / 2, f"{level}\n{height:.2f}",
+                       ha="center", va="center", fontsize=5.4, color="white")
+        running += height
     ax_pi.set_xticks(xs)
     ax_pi.set_xticklabels(short_names, fontsize=5.8)
     ax_pi.set_ylim(0, 1.0)
     ax_pi.set_ylabel("level gate $\\pi$ (composition)")
     ax_pi.set_title("(a) evidence by level", loc="left", fontsize=7.2)
-    ax_pi.legend(fontsize=5.8, loc="upper center", ncol=3, handletextpad=0.35,
-                 columnspacing=0.7, borderpad=0.2, bbox_to_anchor=(0.5, 1.02))
 
     # (b) prototype utilisation as a heat strip
     usage = np.vstack([load_prototypes(root, dataset)["usage"] for dataset, _ in DATASETS])
@@ -175,15 +184,16 @@ def main() -> None:
         ax_prior.errorbar(x, summary["mean"], yerr=summary["std"], marker="o", ms=3.0,
                           lw=1.0, color=DATASET_COLOR[short], capsize=1.1,
                           label=short)
-        ax_prior.axhline(summary["base"], color=DATASET_COLOR[short], lw=0.7, ls=":")
+        guide = ax_prior.axhline(summary["base"], color=DATASET_COLOR[short], lw=0.7, ls=":")
+        guide._guide_line = True
     ax_prior.set_xticks(range(1, 11))
     ax_prior.set_ylim(0, 1.05)
     ax_prior.set_xlabel("boundary-score decile (1 = highest)")
     ax_prior.set_ylabel("action-change rate")
     ax_prior.set_title("(c) boundary score vs prior", loc="left", fontsize=7.2)
-    ax_prior.legend(fontsize=5.8, loc="center right", handletextpad=0.4)
+    ax_prior.legend(fontsize=5.8, loc="upper right", handletextpad=0.4)
 
-    offenders = canvas_qa(fig)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

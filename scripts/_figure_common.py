@@ -137,6 +137,55 @@ def border_qa(png_path: str | Path, ink_threshold: float = 0.985, verbose: bool 
     return inked
 
 
+def legend_overlap_qa(fig, min_pixels: float = 4.0, verbose: bool = True) -> list[tuple]:
+    """Report legends that overlap data artists inside their own axes.
+
+    Full-width guide lines (``axhline`` / ``axvline``) are ignored: a legend
+    placed over a light dotted guide is normal, whereas a legend sitting on top
+    of bars, markers or curves is what readers complain about.
+    """
+    from matplotlib.transforms import Bbox
+
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    offenders: list[tuple] = []
+    for axes in fig.axes:
+        legend = axes.get_legend()
+        if legend is None or not legend.get_visible():
+            continue
+        legend_box = legend.get_window_extent(renderer=renderer)
+        axes_extent = axes.get_window_extent(renderer=renderer)
+        axes_area = max(axes_extent.width * axes_extent.height, 1.0)
+        for artist in list(axes.lines) + list(axes.collections) + list(axes.patches):
+            if getattr(artist, "_guide_line", None):
+                continue
+            try:
+                box = artist.get_window_extent(renderer=renderer)
+            except Exception:
+                continue
+            if box.width <= 0 or box.height <= 0:
+                continue
+            # Errorbar containers and long curves have a bounding box spanning
+            # most of the panel; only localised artists can genuinely be hidden.
+            if box.width * box.height > 0.45 * axes_area:
+                continue
+            overlap = Bbox.intersection(legend_box, box)
+            if overlap is None:
+                continue
+            if overlap.width < min_pixels or overlap.height < min_pixels:
+                continue
+            label = getattr(artist, "get_label", lambda: "")() or type(artist).__name__
+            offenders.append(
+                (axes.get_title()[:24] or "axes", label[:22],
+                 round(overlap.width), round(overlap.height))
+            )
+    if verbose:
+        print(f"[qa] legend/data overlaps: {len(offenders)}")
+        for row in offenders:
+            print(f"      {row}")
+    return offenders
+
+
 # --------------------------------------------------------------------------
 # result aggregation helpers (identical derivation to the manuscript tables)
 # --------------------------------------------------------------------------

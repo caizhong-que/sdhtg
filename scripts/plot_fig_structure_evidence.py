@@ -25,7 +25,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _figure_common import PALETTE, apply_style, canvas_qa, save_pub
+from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
+                            save_pub)
 
 import matplotlib.pyplot as plt
 
@@ -76,7 +77,7 @@ def main() -> None:
     ax1.set_xlim(0, 1.12)
     ax1.set_xlabel("Boundary F1 (top-$k$, tolerance $\\pm2$)")
     ax1.set_title("(a) boundary localisation", loc="left", fontsize=7.2)
-    ax1.legend(loc="lower right", fontsize=6.0, handletextpad=0.4)
+    handles_a = ax1.get_legend_handles_labels()
     ax1.annotate("", xy=(0.995, 0.0 + height / 2), xytext=(0.0, 0.0 + height / 2),
                  arrowprops=dict(arrowstyle="-", color=PALETTE["neutral_light"], lw=0.6))
 
@@ -96,7 +97,7 @@ def main() -> None:
     ax2.set_xlabel("deleted fraction")
     ax2.set_ylabel("$\\mathrm{Fid}(k)$")
     ax2.set_title("(b) faithfulness", loc="left", fontsize=7.2)
-    ax2.legend(loc="lower left", fontsize=5.8, handletextpad=0.4)
+    handles_b = ax2.get_legend_handles_labels()
 
     delta = [FID[f][0] - FID[f][2] for f in fractions]
     ax3.bar(list(xs), delta, color=PALETTE["green_3"], width=0.55,
@@ -110,8 +111,11 @@ def main() -> None:
     ax3.set_ylim(0, max(delta) * 1.35)
     ax3.set_title("(c) relative faithfulness", loc="left", fontsize=7.2)
 
-    fig.tight_layout(w_pad=1.6, h_pad=1.2)
-    offenders = canvas_qa(fig)
+    fig.legend(handles_a[0] + handles_b[0], handles_a[1] + handles_b[1],
+               loc="lower center", ncol=5, fontsize=6.0,
+               bbox_to_anchor=(0.5, 0.005), handletextpad=0.4, columnspacing=1.0)
+    fig.subplots_adjust(left=0.155, right=0.985, top=0.93, bottom=0.22, wspace=0.50)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

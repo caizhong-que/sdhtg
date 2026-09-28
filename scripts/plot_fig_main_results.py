@@ -26,7 +26,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _figure_common import PALETTE, apply_style, canvas_qa, load_results, mean_std, save_pub
+from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
+                            load_results, mean_std, save_pub)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -172,7 +173,7 @@ def main() -> None:
     colorbar.ax.tick_params(labelsize=5.6)
     colorbar.set_label("percentage points", fontsize=5.8)
 
-    offenders = canvas_qa(fig)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 
