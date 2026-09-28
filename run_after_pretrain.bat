@@ -84,6 +84,6 @@ echo ############################################################
 %DRY% %PY% scripts\backfill_prototype_stats.py --datasets ssh --seeds 42 123 256
 
 echo ALL POST-PRETRAIN STEPS DONE
-echo   evidence     : outputs\<dataset>\main\ladder_full\L7\interpretability\
-echo   sensitivity  : outputs\ssh\main\sens_<group>_<variant>\seed_<s>\
+echo   evidence     : outputs\[dataset]\main\ladder_full\L7\interpretability\
+echo   sensitivity  : outputs\ssh\main\sens_[group]_[variant]\seed_[s]\
 pause

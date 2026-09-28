@@ -23,5 +23,5 @@ echo ############################################################
 %PY% scripts\run_parsing_noise.py --datasets ssh --seeds 42 123 --rate 0.2
 
 echo PARSING-NOISE GRID DONE
-echo   results: outputs\ssh\main\noise_r0.2\<kind>_<protocol>\seed_<s>\
+echo   results: outputs\ssh\main\noise_r0.2\[kind]_[protocol]\seed_[s]\
 pause
