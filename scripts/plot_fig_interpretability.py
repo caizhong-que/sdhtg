@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-plot_fig_interpretability.py -- Figure 6: interpretability evidence.
+plot_fig_interpretability.py -- Figure 4: interpretability evidence.
 
-Core conclusion: the level gate pi shows which hierarchy level carries the
-anomaly evidence; the prototype bank is directionally diverse on SSH but
-collapses to a single direction on HDFS while only a few prototypes are used;
-and the boundary score ranks action changes well above the base rate even
-though the model decides not to place internal boundaries.
+Core conclusion: the level gate shows which hierarchy level carries the
+evidence; the prototype bank is directionally diverse on SSH but collapses onto
+a single direction on HDFS while only a few prototypes are used; and the
+boundary score ranks action changes far above the base rate even though the
+model decides not to place internal boundaries.
 
-Panels: (a) level gate pi for normal vs anomalous samples (SSH and HDFS);
-        (b) prototype usage per prototype with directional-similarity annotation;
-        (c) prior-consistency of the boundary score by score decile.
+Design notes (kept deliberately sparse - one encoding per panel):
+  (a) the level gate is a composition (status + action + entity = 1), so it is
+      drawn as stacked bars with a single three-entry legend;
+  (b) utilisation is drawn as a two-row heat strip, which shows both the idle
+      prototypes and the directional collapse without any in-axes text boxes
+      (the pairwise-cosine range is printed in the row label);
+  (c) prior consistency keeps two curves and two dotted base lines; every
+      explanatory note lives in the caption instead of inside the axes.
 
 Data: outputs/<dataset>/main/<tag>/interpretability/{hierarchy,prototypes,boundaries}_seed*.json
 (HDFS 3 seeds, SSH 5 seeds) produced by the section 6.6 scripts.
@@ -20,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import glob
 import json
 import statistics as st
 import sys
@@ -41,42 +45,38 @@ LEVEL_COLOR = {
     "entity": PALETTE["red_strong"],
 }
 DATASETS = (("ssh", "SSH"), ("hdfs", "HDFS"))
+DATASET_COLOR = {"SSH": PALETTE["blue_main"], "HDFS": PALETTE["red_strong"]}
 
 
 def load_hierarchy(root: Path, dataset: str) -> dict:
     rows = []
-    for path in sorted(root.glob(f"{dataset}/main/ladder_full/L7/interpretability/hierarchy_seed*.csv")):
+    for path in sorted(root.glob(
+        f"{dataset}/main/ladder_full/L7/interpretability/hierarchy_seed*.csv"
+    )):
         with path.open(encoding="utf-8") as handle:
             rows.extend(list(csv.DictReader(handle)))
-    buckets = {"normal": {level: [] for level in LEVELS},
-               "anomaly": {level: [] for level in LEVELS}}
-    for row in rows:
-        key = "anomaly" if int(row["label"]) == 1 else "normal"
-        for level in LEVELS:
-            buckets[key][level].append(float(row[f"pi_{level}"]))
     summary = {}
-    for key, levels in buckets.items():
-        summary[key] = {
-            level: (st.fmean(values), st.stdev(values) if len(values) > 1 else 0.0)
-            for level, values in levels.items()
-            if values
-        }
+    for key, label in (("normal", "normal"), ("anomaly", "anomalous")):
+        subset = [row for row in rows if (int(row["label"]) == 1) == (key == "anomaly")]
+        summary[label] = {
+            level: st.fmean(float(row[f"pi_{level}"]) for row in subset)
+            for level in LEVELS
+        } if subset else {level: 0.0 for level in LEVELS}
     return summary
 
 
 def load_prototypes(root: Path, dataset: str) -> dict:
     usage, cosine = [], []
-    for path in sorted(root.glob(f"{dataset}/main/ladder_full/L7/interpretability/prototypes_seed*.json")):
+    for path in sorted(root.glob(
+        f"{dataset}/main/ladder_full/L7/interpretability/prototypes_seed*.json"
+    )):
         payload = json.loads(path.read_text(encoding="utf-8"))
         usage.append([entry["usage_share"] for entry in payload["prototypes"]])
         similarity = payload["prototype_similarity"]
         cosine.append((similarity["mean"], similarity["min"], similarity["max"]))
-    if not usage:
-        return {}
     array = np.asarray(usage)
     return {
-        "usage_mean": array.mean(axis=0),
-        "usage_std": array.std(axis=0, ddof=1) if array.shape[0] > 1 else np.zeros(array.shape[1]),
+        "usage": array.mean(axis=0),
         "cosine_mean": st.fmean(c[0] for c in cosine if c[0] is not None),
         "cosine_min": min(c[1] for c in cosine if c[1] is not None),
         "cosine_max": max(c[2] for c in cosine if c[2] is not None),
@@ -84,20 +84,18 @@ def load_prototypes(root: Path, dataset: str) -> dict:
 
 
 def load_boundaries(root: Path, dataset: str) -> dict:
-    deciles, base, positive = [], [], []
-    for path in sorted(root.glob(f"{dataset}/main/ladder_full/L7/interpretability/boundaries_seed*.json")):
+    deciles, base = [], []
+    for path in sorted(root.glob(
+        f"{dataset}/main/ladder_full/L7/interpretability/boundaries_seed*.json"
+    )):
         payload = json.loads(path.read_text(encoding="utf-8"))["action_boundary"]
         deciles.append([row["primary_change_rate"] for row in payload["deciles"]])
         base.append(payload["primary_change_rate"])
-        positive.append(payload["fraction_score_positive"])
-    if not deciles:
-        return {}
     array = np.asarray(deciles, dtype=float)
     return {
         "mean": array.mean(axis=0),
         "std": array.std(axis=0, ddof=1) if array.shape[0] > 1 else np.zeros(array.shape[1]),
         "base": st.fmean(base),
-        "positive_share": st.fmean(positive),
     }
 
 
@@ -110,81 +108,81 @@ def main() -> None:
 
     root = Path(args.output_root)
     apply_style()
-    fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.8),
-                             gridspec_kw={"width_ratios": [1.0, 1.15, 1.0], "wspace": 0.45})
-    ax_pi, ax_proto, ax_prior = axes
+    fig = plt.figure(figsize=(7.2, 2.5))
+    grid = fig.add_gridspec(1, 3, width_ratios=[0.95, 1.25, 1.05], wspace=0.42,
+                            left=0.085, right=0.985, top=0.82, bottom=0.20)
+    ax_pi = fig.add_subplot(grid[0, 0])
+    ax_usage = fig.add_subplot(grid[0, 1])
+    ax_prior = fig.add_subplot(grid[0, 2])
 
-    # (a) level gate pi, normal vs anomaly
-    hierarchy = {dataset: load_hierarchy(root, dataset) for dataset, _ in DATASETS}
-    width = 0.13
-    group_x = np.arange(len(DATASETS))
-    for level_index, level in enumerate(LEVELS):
-        for class_index, (key, alpha) in enumerate((("normal", 0.45), ("anomaly", 1.0))):
-            offset = (level_index * 2 + class_index - 2.5) * width
-            means = [hierarchy[dataset][key].get(level, (0, 0))[0] for dataset, _ in DATASETS]
-            stds = [hierarchy[dataset][key].get(level, (0, 0))[1] for dataset, _ in DATASETS]
-            ax_pi.bar(group_x + offset, means, width=width, yerr=stds, capsize=1.2,
-                      color=LEVEL_COLOR[level], alpha=alpha,
-                      edgecolor=PALETTE["neutral_dark"], linewidth=0.4,
-                      label=f"{level} ({'anom.' if key == 'anomaly' else 'norm.'})")
-    ax_pi.set_xticks(group_x)
-    ax_pi.set_xticklabels([label for _, label in DATASETS])
-    ax_pi.set_ylabel("level gate $\\pi$")
-    ax_pi.set_title("(a) which level carries the evidence", loc="left", fontsize=7.2)
-    ax_pi.legend(fontsize=5.4, ncol=2, loc="upper center", handletextpad=0.35,
-                 columnspacing=0.7, borderpad=0.2)
+    # (a) stacked composition of the level gate
+    entries = [(dataset, label) for dataset, short in DATASETS for label in ("normal", "anomalous")]
+    short_names = [f"{short}\n{label}" for (dataset, short) in DATASETS
+                   for label in ("normal", "anomalous")]
+    bottoms = [0.0] * len(entries)
+    xs = np.arange(len(entries))
+    for level in LEVELS:
+        heights = []
+        for dataset, short in DATASETS:
+            summary = load_hierarchy(root, dataset)
+            for label in ("normal", "anomalous"):
+                heights.append(summary[label][level])
+        ax_pi.bar(xs, heights, bottom=bottoms, width=0.62,
+                  color=LEVEL_COLOR[level], edgecolor="white", linewidth=0.5,
+                  label=level)
+        bottoms = [b + h for b, h in zip(bottoms, heights)]
+    ax_pi.set_xticks(xs)
+    ax_pi.set_xticklabels(short_names, fontsize=5.8)
+    ax_pi.set_ylim(0, 1.0)
+    ax_pi.set_ylabel("level gate $\\pi$ (composition)")
+    ax_pi.set_title("(a) evidence by level", loc="left", fontsize=7.2)
+    ax_pi.legend(fontsize=5.8, loc="upper center", ncol=3, handletextpad=0.35,
+                 columnspacing=0.7, borderpad=0.2, bbox_to_anchor=(0.5, 1.02))
 
-    # (b) prototype usage + directional similarity
-    summaries = {dataset: load_prototypes(root, dataset) for dataset, _ in DATASETS}
-    indices = np.arange(1, 9)
-    bar_width = 0.38
-    for position, (dataset, label) in enumerate(DATASETS):
-        summary = summaries[dataset]
-        offset = (position - 0.5) * bar_width
-        ax_proto.bar(indices + offset, summary["usage_mean"], width=bar_width,
-                     yerr=summary["usage_std"], capsize=1.2,
-                     color=PALETTE["red_strong"] if label == "HDFS" else PALETTE["blue_main"],
-                     edgecolor=PALETTE["neutral_dark"], linewidth=0.4, label=label)
-        ax_proto.text(
-            0.02, 0.97 - 0.16 * position,
-            f"{label}: cosine {summary['cosine_mean']:.2f} "
-            f"[{summary['cosine_min']:.2f}, {summary['cosine_max']:.2f}]",
-            transform=ax_proto.transAxes, fontsize=5.6, va="top", ha="left",
-            color=PALETTE["neutral_dark"],
+    # (b) prototype utilisation as a heat strip
+    usage = np.vstack([load_prototypes(root, dataset)["usage"] for dataset, _ in DATASETS])
+    image = ax_usage.imshow(usage, aspect="auto", cmap="Blues", vmin=0.0, vmax=1.0)
+    for row in range(usage.shape[0]):
+        for column in range(usage.shape[1]):
+            value = usage[row, column]
+            text = "·" if value < 0.005 else f"{value:.2f}".lstrip("0")
+            ax_usage.text(column, row, text, ha="center", va="center", fontsize=5.6,
+                          color="white" if value > 0.55 else PALETTE["neutral_dark"])
+    row_labels = []
+    for dataset, short in DATASETS:
+        summary = load_prototypes(root, dataset)
+        row_labels.append(
+            f"{short}\ncos {summary['cosine_mean']:.2f}\n"
+            f"[{summary['cosine_min']:.2f}, {summary['cosine_max']:.2f}]"
         )
-    ax_proto.set_xticks(indices)
-    ax_proto.set_xlabel("prototype index")
-    ax_proto.set_ylabel("usage share")
-    ax_proto.set_ylim(0, 1.12)
-    ax_proto.set_title("(b) prototype utilisation and collapse", loc="left", fontsize=7.2)
-    ax_proto.legend(fontsize=5.8, loc="upper right", handletextpad=0.4)
-    ax_proto.text(0.02, 0.36,
-                  "HDFS: directions collapse\n(cosine $\\equiv$ 1.00)",
-                  transform=ax_proto.transAxes, fontsize=5.6, va="top",
-                  color=PALETTE["red_strong"])
+    ax_usage.set_yticks(range(len(row_labels)))
+    ax_usage.set_yticklabels(row_labels, fontsize=5.8)
+    ax_usage.set_xticks(range(usage.shape[1]))
+    ax_usage.set_xticklabels([str(i + 1) for i in range(usage.shape[1])], fontsize=5.8)
+    ax_usage.set_xlabel("normal prototype index")
+    ax_usage.set_title("(b) prototype utilisation", loc="left", fontsize=7.2)
+    for spine in ax_usage.spines.values():
+        spine.set_visible(False)
+    ax_usage.tick_params(length=0)
+    colorbar = fig.colorbar(image, ax=ax_usage, fraction=0.045, pad=0.03)
+    colorbar.set_label("usage share", fontsize=5.8)
+    colorbar.ax.tick_params(labelsize=5.6)
 
     # (c) prior consistency by score decile
-    for dataset, label in DATASETS:
+    for dataset, short in DATASETS:
         summary = load_boundaries(root, dataset)
-        if not summary:
-            continue
         x = np.arange(1, len(summary["mean"]) + 1)
-        colour = PALETTE["red_strong"] if label == "HDFS" else PALETTE["blue_main"]
-        ax_prior.errorbar(x, summary["mean"], yerr=summary["std"], marker="o", ms=3.2,
-                          lw=1.0, color=colour, capsize=1.2, label=label)
-        ax_prior.axhline(summary["base"], color=colour, lw=0.7, ls=":")
+        ax_prior.errorbar(x, summary["mean"], yerr=summary["std"], marker="o", ms=3.0,
+                          lw=1.0, color=DATASET_COLOR[short], capsize=1.1,
+                          label=short)
+        ax_prior.axhline(summary["base"], color=DATASET_COLOR[short], lw=0.7, ls=":")
     ax_prior.set_xticks(range(1, 11))
+    ax_prior.set_ylim(0, 1.05)
     ax_prior.set_xlabel("boundary-score decile (1 = highest)")
     ax_prior.set_ylabel("action-change rate")
-    ax_prior.set_ylim(0, 1.05)
     ax_prior.set_title("(c) boundary score vs prior", loc="left", fontsize=7.2)
     ax_prior.legend(fontsize=5.8, loc="center right", handletextpad=0.4)
-    ax_prior.text(0.03, 0.30,
-                  "dotted: base rate\ninternal boundary share $=0$",
-                  transform=ax_prior.transAxes, fontsize=5.5, va="top",
-                  color=PALETTE["neutral_dark"])
 
-    fig.subplots_adjust(left=0.085, right=0.985, top=0.86, bottom=0.19, wspace=0.52)
     offenders = canvas_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
