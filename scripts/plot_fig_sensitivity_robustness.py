@@ -7,15 +7,19 @@ Core conclusion: the default configuration sits inside the stable region - on
 the declared selection criterion (validation AUPRC) no alternative is clearly
 better - while several settings that look better on the test metric are worse
 on validation, so they are reported rather than adopted; and template-level
-parser noise mainly damages the threshold-calibrated metric, not the ranking.
+parser noise leaves the ranking untouched while the threshold-calibrated F1
+moves in both directions, i.e. the F1 movement is calibration noise rather
+than a systematic loss of detection ability.
 
 Panels: (a) per-variant change of validation AUPRC and test F1 against the
-        default model;  (b) delta F1 under four parsing-noise kinds and two
-        contamination protocols.
+        default model;  (b) paired change (corrupted test minus clean test of
+        the *same* weights and the *same* threshold) under four parsing-noise
+        kinds and two contamination protocols.
 
 Data: outputs/ssh/main/sens_* (3 seeds each; epsilon_m = 1e-2 has no result
 because the hierarchy saturates and exceeds the memory budget) and
-outputs/ssh/main/noise_r0.2 (2 seeds each).
+outputs/ssh/main/noise_r0.2 (2 seeds each, paired reference produced by
+scripts/evaluate_noise_paired.py).
 """
 
 from __future__ import annotations
@@ -64,9 +68,16 @@ NOISE_KINDS = [("replace", "replace"), ("merge", "merge"), ("split", "split"), (
 NOISE_PROTOCOLS = [("test_only", "test only"), ("all", "train + test")]
 
 
-def stat(root: Path, tag: str, metric: str) -> tuple[int, float] | None:
-    values = []
+def seed_dirs(root: Path, tag: str, seeds: set[int] | None = None):
     for seed_dir in sorted((root / tag).glob("seed_*")):
+        if seeds is not None and int(seed_dir.name.split("_")[1]) not in seeds:
+            continue
+        yield seed_dir
+
+
+def stat(root: Path, tag: str, metric: str, seeds: set[int] | None = None):
+    values = []
+    for seed_dir in seed_dirs(root, tag, seeds):
         result = seed_dir / "result.json"
         if result.is_file():
             payload = json.loads(result.read_text(encoding="utf-8"))["test"]
@@ -75,9 +86,9 @@ def stat(root: Path, tag: str, metric: str) -> tuple[int, float] | None:
     return (len(values), st.mean(values)) if values else None
 
 
-def best_validation(root: Path, tag: str) -> tuple[int, float] | None:
+def best_validation(root: Path, tag: str, seeds: set[int] | None = None):
     values = []
-    for seed_dir in sorted((root / tag).glob("seed_*")):
+    for seed_dir in seed_dirs(root, tag, seeds):
         history = seed_dir / "history.json"
         if not history.is_file():
             continue
@@ -90,19 +101,38 @@ def best_validation(root: Path, tag: str) -> tuple[int, float] | None:
     return (len(values), st.mean(values)) if values else None
 
 
+def paired_deltas(root: Path, tag: str, metric: str):
+    """Corrupted-test minus clean-test, same weights and same threshold."""
+    values = []
+    for seed_dir in seed_dirs(root, tag):
+        noisy_path = seed_dir / "result.json"
+        clean_path = seed_dir / "clean_paired.json"
+        if not (noisy_path.is_file() and clean_path.is_file()):
+            continue
+        noisy = json.loads(noisy_path.read_text(encoding="utf-8"))["test"].get(metric)
+        clean = json.loads(clean_path.read_text(encoding="utf-8"))["clean_test"].get(metric)
+        if noisy is None or clean is None:
+            continue
+        values.append(100.0 * (float(noisy) - float(clean)))
+    return values
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-root", default="outputs")
     parser.add_argument("--dataset", default="ssh")
     parser.add_argument("--reference", default="ladder_full/L7")
+    parser.add_argument("--reference-seeds", nargs="+", type=int, default=[42, 123, 256],
+                        help="seed subset of the reference run, matching the sweep")
     parser.add_argument("--noise-rate", default="0.2")
     parser.add_argument("--out-dir", default="figure")
     parser.add_argument("--name", default="fig_sensitivity_robustness")
     args = parser.parse_args()
 
     root = Path(args.output_root) / args.dataset / "main"
-    reference_val = best_validation(root, args.reference)
-    reference_f1 = stat(root, args.reference, "f1")
+    reference_seeds = set(args.reference_seeds)
+    reference_val = best_validation(root, args.reference, reference_seeds)
+    reference_f1 = stat(root, args.reference, "f1", reference_seeds)
     if reference_val is None or reference_f1 is None:
         raise SystemExit("reference run is missing")
 
@@ -165,48 +195,60 @@ def main() -> None:
     ]
     sensitivity_handles = handles
 
-    # (b) parsing-noise robustness
+    # (b) parsing-noise robustness: paired with the same weights and threshold
     ax_auprc = ax_noise.twinx()
     ax_auprc.spines["right"].set_visible(True)
     ax_auprc.spines["top"].set_visible(False)
     kind_x = np.arange(len(NOISE_KINDS))
-    width = 0.36
-    auprc_reference = stat(root, args.reference, "auprc")
+    width = 0.34
+    f1_limits = (-6.0, 18.0)
+    protocol_colours = [PALETTE["neutral_mid"], PALETTE["green_3"]]
     for position, (protocol, protocol_label) in enumerate(NOISE_PROTOCOLS):
-        deltas, auprc_deltas = [], []
-        for kind, _ in NOISE_KINDS:
-            tag = f"noise_r{args.noise_rate}/{kind}_{protocol}"
-            f1 = stat(root, tag, "f1")
-            auprc = stat(root, tag, "auprc")
-            deltas.append(np.nan if f1 is None else (f1[1] - reference_f1[1]) * 100)
-            auprc_deltas.append(
-                np.nan if (auprc is None or auprc_reference is None)
-                else (auprc[1] - auprc_reference[1]) * 100
-            )
         offset = (position - 0.5) * width
-        colours = [PALETTE["red_strong"] if value < 0 else PALETTE["green_3"] for value in deltas]
-        ax_noise.bar(kind_x + offset, deltas, width=width, color=colours,
-                     edgecolor=PALETTE["neutral_dark"], linewidth=0.4)
-        ax_auprc.plot(kind_x + offset, auprc_deltas, marker="o", ms=3.2, lw=0.0,
-                      mfc="white", mec=PALETTE["blue_main"], mew=0.9, ls="none",
-                      label=protocol_label)
-    ax_noise.axhline(0, color=PALETTE["neutral_dark"], lw=0.8)
+        means, low, high = [], [], []
+        for kind, _ in NOISE_KINDS:
+            values = paired_deltas(root, f"noise_r{args.noise_rate}/{kind}_{protocol}", "f1")
+            if values:
+                means.append(st.mean(values))
+                low.append(st.mean(values) - min(values))
+                high.append(max(values) - st.mean(values))
+            else:
+                means.append(np.nan)
+                low.append(0.0)
+                high.append(0.0)
+        ax_noise.bar(kind_x + offset, means, width=width, color=protocol_colours[position],
+                     alpha=0.85, edgecolor=PALETTE["neutral_dark"], linewidth=0.4,
+                     label=protocol_label, zorder=2)
+        ax_noise.errorbar(kind_x + offset, means, yerr=[low, high], fmt="none",
+                          ecolor=PALETTE["neutral_black"], elinewidth=0.7, capsize=1.6,
+                          zorder=3)
+        for position_kind, (kind, _) in enumerate(NOISE_KINDS):
+            values = paired_deltas(root, f"noise_r{args.noise_rate}/{kind}_{protocol}", "auprc")
+            if not values:
+                continue
+            for step, value in enumerate(values):
+                jitter = (step - (len(values) - 1) / 2) * 0.045
+                ax_auprc.plot(kind_x[position_kind] + offset + jitter, value * 100,
+                              marker="o", ms=3.0, ls="none", mfc="white",
+                              mec=PALETTE["blue_main"], mew=0.8, zorder=4)
+    ax_noise.axhline(0, color=PALETTE["neutral_dark"], lw=0.8, zorder=1)
     ax_noise.set_xticks(kind_x)
     ax_noise.set_xticklabels([label for _, label in NOISE_KINDS])
-    ax_noise.set_ylim(-3.6, 2.6)
-    ax_auprc.set_ylim(-0.6, 0.6)
+    ax_noise.set_ylim(*f1_limits)
+    span = f1_limits[1] - f1_limits[0]
+    ax_auprc.set_ylim(-f1_limits[0] / span * 2.4, f1_limits[1] / span * 2.4)
     ax_noise.set_xlabel("template-level parser corruption")
-    ax_noise.set_ylabel("$\\Delta$F1 vs clean model (pt)")
+    ax_noise.set_ylabel("$\\Delta$F1, corrupted $-$ clean (pt)")
     ax_auprc.set_ylabel("$\\Delta$AUPRC (pt)", color=PALETTE["blue_main"])
     ax_auprc.tick_params(axis="y", colors=PALETTE["blue_main"])
     ax_auprc.tick_params(axis="x", labelbottom=False)
     ax_noise.set_title("(b) parsing-noise robustness", loc="left", fontsize=7.2)
-    bars = [plt.Rectangle((0, 0), 1, 1, color=PALETTE["neutral_light"], label="test-only"),
-            plt.Rectangle((0, 0), 1, 1, color=PALETTE["green_3"], label="train + test")]
-    markers = plt.Line2D([], [], marker="o", ls="none", mfc="white",
-                         mec=PALETTE["blue_main"], mew=0.9, ms=3.6,
-                         label="$\\Delta$AUPRC (noise vs clean)")
-    noise_handles = bars + [markers]
+    noise_handles = [
+        plt.Rectangle((0, 0), 1, 1, color=protocol_colours[0], label="test-only"),
+        plt.Rectangle((0, 0), 1, 1, color=protocol_colours[1], label="train + test"),
+        plt.Line2D([], [], marker="o", ls="none", mfc="white",
+                   mec=PALETTE["blue_main"], mew=0.9, ms=3.6, label="$\\Delta$AUPRC"),
+    ]
 
     fig.legend(sensitivity_handles + noise_handles,
                [handle.get_label() for handle in sensitivity_handles + noise_handles],
