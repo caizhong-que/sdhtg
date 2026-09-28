@@ -33,7 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
-                            save_pub)
+                            save_pub, text_overlap_qa)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -193,7 +193,7 @@ def main() -> None:
     ax_prior.set_title("(c) boundary score vs prior", loc="left", fontsize=7.2)
     ax_prior.legend(fontsize=5.8, loc="upper right", handletextpad=0.4)
 
-    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig) + text_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

@@ -186,6 +186,65 @@ def legend_overlap_qa(fig, min_pixels: float = 4.0, verbose: bool = True) -> lis
     return offenders
 
 
+def text_overlap_qa(fig, min_width: float = 6.0, min_height: float = 5.0,
+                    verbose: bool = True) -> list[tuple]:
+    """Report text artists that overlap each other (titles, tick labels, notes).
+
+    Only pairs whose intersection is larger than a small threshold are listed,
+    so adjacent thin glyph boxes do not flood the report.
+    """
+    from matplotlib.transforms import Bbox
+
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    entries: list[tuple[object, str, Bbox]] = []
+    for axes in list(fig.axes) + [fig]:
+        texts = []
+        if axes is fig:
+            texts = list(getattr(fig, "texts", []))
+        else:
+            texts = list(axes.texts) + [axes.title]
+            if getattr(axes, "axison", True):
+                texts += list(axes.get_xticklabels()) + list(axes.get_yticklabels())
+                texts += [axes.xaxis.label, axes.yaxis.label]
+        for text in texts:
+            content = text.get_text().strip()
+            if not content or not text.get_visible():
+                continue
+            try:
+                box = text.get_window_extent(renderer=renderer)
+            except Exception:
+                continue
+            if box.width <= 0 or box.height <= 0:
+                continue
+            entries.append((text, content, box))
+
+    offenders: list[tuple] = []
+    for i in range(len(entries)):
+        for j in range(i + 1, len(entries)):
+            object_a, label_a, box_a = entries[i]
+            object_b, label_b, box_b = entries[j]
+            if object_a is object_b:
+                # Twin axes share the same tick label objects; comparing an
+                # object with itself is not an overlap.
+                continue
+            overlap = Bbox.intersection(box_a, box_b)
+            if overlap is None:
+                continue
+            if overlap.width < min_width or overlap.height < min_height:
+                continue
+            offenders.append(
+                (label_a[:22].encode("ascii", "replace").decode("ascii"),
+                 label_b[:22].encode("ascii", "replace").decode("ascii"),
+                 round(overlap.width), round(overlap.height))
+            )
+    if verbose:
+        print(f"[qa] text/text overlaps: {len(offenders)}")
+        for row in offenders[:12]:
+            print(f"      {row}")
+    return offenders
+
+
 # --------------------------------------------------------------------------
 # result aggregation helpers (identical derivation to the manuscript tables)
 # --------------------------------------------------------------------------

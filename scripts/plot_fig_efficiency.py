@@ -127,7 +127,7 @@ def main() -> None:
     fig.legend(handles, labels, loc="lower center", ncol=5, fontsize=6.0,
                bbox_to_anchor=(0.5, 0.005), handletextpad=0.4, columnspacing=1.1)
     fig.tight_layout(w_pad=1.6, h_pad=1.4, rect=(0, 0.05, 1, 1))
-    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig) + text_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

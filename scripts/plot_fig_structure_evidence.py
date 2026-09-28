@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
-                            save_pub)
+                            save_pub, text_overlap_qa)
 
 import matplotlib.pyplot as plt
 
@@ -115,7 +115,7 @@ def main() -> None:
                loc="lower center", ncol=5, fontsize=6.0,
                bbox_to_anchor=(0.5, 0.005), handletextpad=0.4, columnspacing=1.0)
     fig.subplots_adjust(left=0.155, right=0.985, top=0.93, bottom=0.22, wspace=0.50)
-    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig) + text_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

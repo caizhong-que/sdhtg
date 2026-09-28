@@ -28,7 +28,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _figure_common import PALETTE, apply_style, canvas_qa, legend_overlap_qa, load_results, mean_std, save_pub
+from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
+                            load_results, mean_std, save_pub, text_overlap_qa)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -100,7 +101,8 @@ def main() -> None:
                           color=PALETTE["neutral_black"])
     ax_delta.axhline(0, color=PALETTE["neutral_dark"], lw=0.8)
     ax_delta.set_xticks(xs)
-    ax_delta.set_xticklabels(labels, fontsize=6.0, rotation=20, ha="right")
+    ax_delta.set_xticklabels([label.replace("Thunderbird", "Thunder-\nbird")
+                                for label in labels], fontsize=5.2)
     ax_delta.set_ylim(-1.4, 5.2)
     ax_delta.set_ylabel("change vs strongest baseline (pt)")
     ax_delta.set_title("(a) where the gain is", loc="left", fontsize=7.2)
@@ -128,13 +130,13 @@ def main() -> None:
         ax.set_xticks([])
         ax.set_yticks([round(min(means), 3), round(max(means), 3)])
         ax.tick_params(axis="y", labelsize=5.2, length=2)
-        ax.set_title(label, fontsize=6.4, pad=3)
+        ax.set_title(label.replace("Thunderbird", "Thunder-\nbird"),
+                     fontsize=5.6, pad=2.5)
         if column == 0:
             ax.set_ylabel("F1 (local range)")
         best_value = max(means[:3])
         ax.axhline(best_value, color=PALETTE["neutral_light"], lw=0.6, ls="--", zorder=1)
-    fig.text(0.60, 0.90, "(b) absolute F1, each panel zoomed to its own four-method range",
-             ha="center", va="bottom", fontsize=7.2)
+    fig.text(0.375, 0.945, "(b) absolute F1", ha="left", va="bottom", fontsize=7.2)
     handles = [
         plt.Line2D([], [], marker=marker, ls="none", mfc="white" if name != "SDHTG" else colour,
                    mec=colour, mew=0.9, ms=4.0, label=name)
@@ -143,7 +145,7 @@ def main() -> None:
     fig.legend(handles=handles, loc="lower center", ncol=4, fontsize=6.0,
                bbox_to_anchor=(0.77, 0.005), handletextpad=0.4, columnspacing=1.2)
 
-    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig) + text_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 

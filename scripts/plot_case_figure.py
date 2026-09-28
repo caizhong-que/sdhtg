@@ -38,7 +38,8 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _figure_common import border_qa, canvas_qa, legend_overlap_qa  # noqa: E402
+from _figure_common import (border_qa, canvas_qa, legend_overlap_qa,  # noqa: E402
+                            text_overlap_qa)
 from matplotlib.lines import Line2D
 
 
@@ -293,7 +294,7 @@ def main() -> None:
         columnspacing=1.4,
     )
 
-    print(canvas_qa(fig), legend_overlap_qa(fig))
+    print(canvas_qa(fig), legend_overlap_qa(fig), text_overlap_qa(fig))
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = out_dir / args.name

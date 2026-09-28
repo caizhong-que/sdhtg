@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
-                            save_pub)
+                            save_pub, text_overlap_qa)
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
@@ -209,7 +209,7 @@ def main() -> None:
         color=PALETTE["neutral_black"],
     )
 
-    offenders = canvas_qa(fig) + legend_overlap_qa(fig)
+    offenders = canvas_qa(fig) + legend_overlap_qa(fig) + text_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
     print(f"wrote {stem}.svg / .pdf / .png ({len(offenders)} canvas overflows)")
 
