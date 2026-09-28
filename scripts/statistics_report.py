@@ -40,20 +40,28 @@ except Exception:  # pragma: no cover
 
 
 DATASETS = ["ssh", "hdfs", "bgl", "openstack", "thunderbird"]
-STRONGEST = {
-    "ssh": "baseline_tcn",
-    "hdfs": "baseline_tcn",
-    "bgl": "baseline_gnn_flat",
-    "openstack": "ladder_full/L0",
-    "thunderbird": "baseline_gnn_flat",
+# Unified-protocol baselines, including the flat GRU baseline L0: on SSH the
+# GRU baseline is actually stronger than TCN, so "strongest baseline" has to be
+# resolved per dataset *and* per metric instead of being hard-coded.
+BASELINES = {
+    "ladder_full/L0": "GRU-flat (L0)",
+    "baseline_tcn": "TCN",
+    "baseline_transformer": "Transformer",
+    "baseline_gnn_flat": "GNN-flat",
 }
-STRONGEST_LABEL = {
-    "ssh": "TCN",
-    "hdfs": "TCN",
-    "bgl": "GNN-flat",
-    "openstack": "L0",
-    "thunderbird": "GNN-flat",
-}
+
+
+def strongest_baseline(dataset: str, metric: str) -> tuple[str, float]:
+    root = Path(f"outputs/{dataset}/main")
+    best_tag, best_label, best_value = None, None, -np.inf
+    for tag, label in BASELINES.items():
+        values = load_per_seed(root / tag, metric)
+        if not values:
+            continue
+        mean = float(np.mean(list(values.values())))
+        if mean > best_value:
+            best_tag, best_label, best_value = tag, label, mean
+    return best_tag, best_label
 
 
 def compare(root: Path, control: str, treatment: str, metric: str):
@@ -82,20 +90,22 @@ def main() -> None:
     report: dict[str, dict] = {}
 
     # ------------------------------------------------------------- family 1/2
-    for family, control_of in (
-        ("primary", lambda ds: STRONGEST[ds]),
-        ("baseline", lambda ds: "ladder_full/L0"),
-    ):
+    for family in ("primary", "baseline"):
         rows = []
         for dataset in DATASETS:
             root = Path(f"outputs/{dataset}/main")
             for metric, key in (("test_f1", "f1"), ("test_auprc", "auprc")):
-                result = compare(root, control_of(dataset), "ladder_full/L7", metric)
+                if family == "primary":
+                    control, label = strongest_baseline(dataset, metric)
+                else:
+                    control, label = "ladder_full/L0", "GRU-flat (L0)"
+                result = compare(root, control, "ladder_full/L7", metric)
                 if result is None:
                     continue
                 rows.append({
                     "dataset": dataset,
-                    "control": control_of(dataset),
+                    "control": control,
+                    "control_label": label,
                     "metric": key,
                     **result,
                 })
@@ -138,7 +148,7 @@ def main() -> None:
     for family, rows in report.items():
         for row in rows:
             if family == "primary":
-                name = f"vs {STRONGEST_LABEL[row['dataset']]}"
+                name = f"vs {row['control_label']}"
             elif family == "baseline":
                 name = "vs L0"
             else:
