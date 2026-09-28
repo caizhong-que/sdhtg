@@ -69,16 +69,24 @@ def cliff_delta(control: np.ndarray, treatment: np.ndarray) -> float:
 
 
 def holm_correct(p_values: list[float]) -> list[float]:
-    """Holm-Bonferroni corrected q-values (manuscript Section 5.5)."""
-    order = np.argsort(p_values)
-    ranks = np.empty_like(order)
-    ranks[order] = np.arange(1, len(p_values) + 1)
-    m = len(p_values)
-    corrected = np.asarray(p_values) * (m - ranks + 1)
-    # enforce monotonicity
-    for i in range(m - 2, -1, -1):
-        corrected[i] = min(corrected[i], corrected[i + 1])
-    return corrected.clip(max=1.0).tolist()
+    """Holm-Bonferroni corrected q-values (manuscript Section 5.5).
+
+    Holm step-down: with p_(1) <= ... <= p_(m), q_(i) = max_{j<=i}
+    (m - j + 1) * p_(j), then clipped at 1.  The returned list is aligned with
+    the *input* order, so callers can zip it with their method names.
+    """
+    p = np.asarray(p_values, dtype=float)
+    m = p.size
+    if m == 0:
+        return []
+    order = np.argsort(p, kind="stable")
+    adjusted = np.empty(m, dtype=float)
+    running = 0.0
+    for rank, index in enumerate(order, start=1):
+        factor = m - rank + 1
+        running = max(running, float(p[index]) * factor)
+        adjusted[index] = running
+    return np.clip(adjusted, 0.0, 1.0).tolist()
 
 
 def main() -> None:
@@ -104,7 +112,7 @@ def main() -> None:
     print(f"{'method':<24}{'n':>4}{'mean':>10}{'std':>10}{'delta':>10}"
           f"{'p':>10}{'q_holm':>10}{'cliff':>10}")
 
-    p_values, names = [], []
+    rows = []
     for method in args.methods:
         values = load_per_seed(root / method, args.metric)
         common = [k for k in baseline_keys if k in values]
@@ -116,20 +124,30 @@ def main() -> None:
         statistic, p_value = scipy_stats.wilcoxon(
             treatment_arr, base_common, alternative="two-sided"
         )
-        p_values.append(float(p_value))
-        names.append(method)
-        print(
-            f"{method:<24}{len(common):>4}{treatment_arr.mean():>10.4f}"
-            f"{treatment_arr.std(ddof=1):>10.4f}"
-            f"{treatment_arr.mean()-base_common.mean():>10.4f}"
-            f"{p_value:>10.4f}{'':>10}{cliff_delta(base_common, treatment_arr):>10.4f}"
-        )
+        rows.append((
+            method,
+            len(common),
+            float(treatment_arr.mean()),
+            float(treatment_arr.std(ddof=1)),
+            float(treatment_arr.mean() - base_common.mean()),
+            float(p_value),
+            cliff_delta(base_common, treatment_arr),
+        ))
 
-    if p_values:
-        corrected = holm_correct(p_values)
+    if rows:
+        corrected = holm_correct([row[5] for row in rows])
+        for row, q_value in zip(rows, corrected):
+            method, n, mean, std, delta, p_value, delta_effect = row
+            print(
+                f"{method:<24}{n:>4}{mean:>10.4f}{std:>10.4f}{delta:>10.4f}"
+                f"{p_value:>10.4f}{q_value:>10.4f}{delta_effect:>10.4f}"
+            )
         print("\nHolm-corrected q-values:")
-        for name, q_value in zip(names, corrected):
-            print(f"  {name:<24} q={q_value:.4f}")
+        for row, q_value in zip(rows, corrected):
+            print(
+                f"  {row[0]:<24} p={row[5]:.4f} q={q_value:.4f} "
+                f"cliff={row[6]:+.4f}"
+            )
 
 
 if __name__ == "__main__":
