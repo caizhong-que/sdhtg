@@ -2,18 +2,20 @@
 """
 plot_fig_main_results.py -- Figure 2: main comparison across five datasets.
 
-Core conclusion: SDHTG is ahead exactly where the task has dynamic range, and
-the advantage lives in the threshold-calibrated metric rather than in ranking;
-on the three saturated datasets every method sits at the ceiling, and on
-Thunderbird a flat GNN baseline stays marginally ahead.
+Core conclusion: SDHTG wins where the task has dynamic range, and the win lives
+in the threshold-calibrated metric rather than in ranking (HDFS: AUPRC slightly
+below the best baseline, F1 far above); on the three saturated datasets the
+differences are at the 1e-3 level, and on Thunderbird a flat GNN baseline
+stays marginally ahead.
 
-Design notes (journal experiment figure):
-  * two dot plots with one axis per metric, so the rank order of the four
-    methods is readable at a glance instead of clustered in a corner;
-  * the five datasets are split into "dynamic range" and "saturated" groups by
-    a separator, because the saturated group carries no discriminative signal;
-  * a diverging heat map gives the per-dataset, per-metric delta against the
-    best baseline, which is how the AUPRC/F1 separation becomes explicit.
+Design notes (this is the "direct" version of the comparison):
+  (a) the reader should not have to aggregate four methods x two metrics by
+      eye, so the left panel shows only the change against the strongest
+      baseline per dataset, grouped by metric and annotated with the values;
+  (b) absolute F1 is shown as five small multiples, each zoomed to its own
+      four-method range, so the saturated datasets stay readable instead of
+      collapsing onto one pixel at the ceiling. The caption states that the
+      panels use per-dataset ranges.
 
 Data: outputs/<dataset>/main/<tag>/seed_*/result.json (5 seeds, mean +- std).
 """
@@ -26,8 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _figure_common import (PALETTE, apply_style, canvas_qa, legend_overlap_qa,
-                            load_results, mean_std, save_pub)
+from _figure_common import PALETTE, apply_style, canvas_qa, legend_overlap_qa, load_results, mean_std, save_pub
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -46,8 +47,7 @@ METHODS = [
     ("GNN-flat", "#B4C0E4", "s"),
     ("SDHTG", PALETTE["red_strong"], "D"),
 ]
-OFFSETS = {"TCN": -0.27, "Transformer": -0.09, "GNN-flat": 0.09, "SDHTG": 0.27}
-SPLIT_AFTER = 1  # datasets 0-1 have dynamic range, 2-4 are saturated
+METRIC_COLOR = {"AUPRC": PALETTE["blue_main"], "F1": PALETTE["red_strong"]}
 
 
 def collect(output_root: str, metric: str) -> dict[str, dict[str, tuple[float, float]]]:
@@ -58,50 +58,6 @@ def collect(output_root: str, metric: str) -> dict[str, dict[str, tuple[float, f
     return table
 
 
-def draw_dotplot(ax, table, ylabel, title, ylim, annotation=None) -> None:
-    labels = [label for _, label in DATASETS]
-    xs = np.arange(len(labels))
-    for method, colour, marker in METHODS:
-        means, errs, positions = [], [], []
-        for index, label in enumerate(labels):
-            if method not in table[label]:
-                continue
-            mean, std = table[label][method]
-            means.append(mean)
-            errs.append(std)
-            positions.append(xs[index] + OFFSETS[method])
-        ax.errorbar(
-            positions,
-            means,
-            yerr=errs,
-            marker=marker,
-            ms=3.6 if method != "SDHTG" else 4.4,
-            color=colour,
-            mfc=colour if method == "SDHTG" else "white",
-            mec=colour,
-            mew=0.9,
-            ls="none",
-            elinewidth=0.7,
-            capsize=1.1,
-            label=method,
-            zorder=4 if method == "SDHTG" else 3,
-        )
-    ax.axvline(SPLIT_AFTER + 0.5, color=PALETTE["neutral_light"], lw=0.7, ls="--")
-    ax.set_xticks(xs)
-    ax.set_xticklabels(labels, fontsize=6.2)
-    ax.set_ylim(*ylim)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title, loc="left", fontsize=7.2)
-    if annotation:
-        ax.annotate(annotation[0], xy=annotation[1], xytext=annotation[2],
-                    fontsize=5.6, color=PALETTE["neutral_dark"],
-                    arrowprops=dict(arrowstyle="-", color=PALETTE["neutral_mid"], lw=0.6))
-    ax.text(0.5, 0.985, "dynamic range", transform=ax.get_xaxis_transform(),
-            ha="center", va="top", fontsize=5.4, color=PALETTE["neutral_mid"])
-    ax.text(3.5, 0.985, "saturated", transform=ax.get_xaxis_transform(),
-            ha="center", va="top", fontsize=5.4, color=PALETTE["neutral_mid"])
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", default="figure")
@@ -110,68 +66,82 @@ def main() -> None:
     args = parser.parse_args()
 
     apply_style()
-    fig = plt.figure(figsize=(7.2, 2.75))
-    grid = fig.add_gridspec(1, 3, width_ratios=[1.25, 1.25, 0.85], wspace=0.42,
-                            left=0.075, right=0.90, top=0.86, bottom=0.16)
-    ax_f1 = fig.add_subplot(grid[0, 0])
-    ax_auprc = fig.add_subplot(grid[0, 1])
-    ax_delta = fig.add_subplot(grid[0, 2])
-
     f1_table = collect(args.output_root, "f1")
     auprc_table = collect(args.output_root, "auprc")
+    labels = [label for _, label in DATASETS]
 
-    draw_dotplot(ax_f1, f1_table, "F1 (validation-calibrated)", "(a) decision metric",
-                 (0.54, 1.012),
-                 annotation=("HDFS: $+0.040$ over\nthe best baseline",
-                             (1 + OFFSETS["SDHTG"], f1_table["HDFS"]["SDHTG"][0]),
-                             (2.15, 0.70)))
-    draw_dotplot(ax_auprc, auprc_table, "AUPRC (threshold-free)", "(b) ranking metric",
-                 (0.36, 1.012),
-                 annotation=("HDFS: Transformer\nstays ahead",
-                             (1 + OFFSETS["Transformer"], auprc_table["HDFS"]["Transformer"][0]),
-                             (2.2, 0.62)))
+    fig = plt.figure(figsize=(7.2, 2.85))
+    grid = fig.add_gridspec(1, 2, width_ratios=[1.0, 1.95], wspace=0.30,
+                            left=0.085, right=0.99, top=0.87, bottom=0.17)
+    ax_delta = fig.add_subplot(grid[0, 0])
+    right = grid[0, 1].subgridspec(1, len(labels), wspace=0.42)
 
+    # (a) change against the strongest baseline, per metric
+    deltas = {metric: [] for metric in ("AUPRC", "F1")}
+    best_names = []
+    for label in labels:
+        for metric, table in (("AUPRC", auprc_table), ("F1", f1_table)):
+            own = table[label]["SDHTG"][0]
+            baselines = {k: v[0] for k, v in table[label].items() if k != "SDHTG"}
+            best = max(baselines, key=baselines.get)
+            deltas[metric].append((own - baselines[best]) * 100)
+            if metric == "F1":
+                best_names.append(best)
+    xs = np.arange(len(labels))
+    width = 0.36
+    for position, metric in enumerate(("AUPRC", "F1")):
+        offset = (position - 0.5) * width
+        ax_delta.bar(xs + offset, deltas[metric], width=width,
+                     color=METRIC_COLOR[metric], edgecolor=PALETTE["neutral_dark"],
+                     linewidth=0.4, label=f"$\\Delta${metric}")
+        for x, value in zip(xs + offset, deltas[metric]):
+            ax_delta.text(x, value + (0.09 if value >= 0 else -0.09), f"{value:+.2f}",
+                          ha="center", va="bottom" if value >= 0 else "top", fontsize=5.6,
+                          color=PALETTE["neutral_black"])
+    ax_delta.axhline(0, color=PALETTE["neutral_dark"], lw=0.8)
+    ax_delta.set_xticks(xs)
+    ax_delta.set_xticklabels(labels, fontsize=6.0, rotation=20, ha="right")
+    ax_delta.set_ylim(-1.4, 5.2)
+    ax_delta.set_ylabel("change vs strongest baseline (pt)")
+    ax_delta.set_title("(a) where the gain is", loc="left", fontsize=7.2)
+    ax_delta.legend(fontsize=6.0, loc="upper right", handletextpad=0.4)
+    for x, name in zip(xs, best_names):
+        ax_delta.text(x, -1.25, f"vs {name}", ha="center", va="bottom", fontsize=5.0,
+                      color=PALETTE["neutral_mid"], rotation=0)
+
+    # (b) absolute F1 as per-dataset small multiples with local ranges
+    for column, label in enumerate(labels):
+        ax = fig.add_subplot(right[0, column], sharex=None)
+        means = [f1_table[label][name][0] for name, _, _ in METHODS]
+        errs = [f1_table[label][name][1] for name, _, _ in METHODS]
+        positions = np.arange(len(METHODS))
+        for index, (name, colour, marker) in enumerate(METHODS):
+            ax.errorbar(index, means[index], yerr=errs[index], marker=marker,
+                        ms=3.4 if name != "SDHTG" else 4.2,
+                        mfc=colour if name == "SDHTG" else "white",
+                        mec=colour, mew=0.9, ls="none", elinewidth=0.7, capsize=1.1,
+                        color=colour, zorder=4 if name == "SDHTG" else 3)
+        span = max(means) - min(means)
+        pad = max(span * 0.28, 0.0015)
+        ax.set_ylim(min(means) - pad, max(means) + pad)
+        ax.set_xlim(-0.6, len(METHODS) - 0.4)
+        ax.set_xticks([])
+        ax.set_yticks([round(min(means), 3), round(max(means), 3)])
+        ax.tick_params(axis="y", labelsize=5.2, length=2)
+        ax.set_title(label, fontsize=6.4, pad=3)
+        if column == 0:
+            ax.set_ylabel("F1 (local range)")
+        best_value = max(means[:3])
+        ax.axhline(best_value, color=PALETTE["neutral_light"], lw=0.6, ls="--", zorder=1)
+    fig.text(0.60, 0.90, "(b) absolute F1, each panel zoomed to its own four-method range",
+             ha="center", va="bottom", fontsize=7.2)
     handles = [
         plt.Line2D([], [], marker=marker, ls="none", mfc="white" if name != "SDHTG" else colour,
                    mec=colour, mew=0.9, ms=4.0, label=name)
         for name, colour, marker in METHODS
     ]
-    ax_f1.legend(handles=handles, fontsize=5.8, ncol=2, loc="lower left",
-                 handletextpad=0.35, columnspacing=0.8, borderpad=0.2)
-
-    # (c) delta against the best baseline per metric
-    rows = [label for _, label in DATASETS]
-    delta = np.zeros((len(rows), 2))
-    best_names = []
-    for index, label in enumerate(rows):
-        for column, table in enumerate((auprc_table, f1_table)):
-            own = table[label]["SDHTG"][0]
-            baselines = {k: v[0] for k, v in table[label].items() if k != "SDHTG"}
-            best_name = max(baselines, key=baselines.get)
-            best_names.append(best_name if column == 1 else None)
-            delta[index, column] = (own - baselines[best_name]) * 100
-    limit = float(np.abs(delta).max()) * 1.05
-    image = ax_delta.imshow(delta, cmap="RdBu_r", vmin=-limit, vmax=limit, aspect="auto")
-    for i in range(delta.shape[0]):
-        for j in range(delta.shape[1]):
-            ax_delta.text(j, i, f"{delta[i, j]:+.2f}", ha="center", va="center",
-                          fontsize=5.8,
-                          color="white" if abs(delta[i, j]) > 0.55 * limit else PALETTE["neutral_black"])
-    ax_delta.set_xticks([0, 1])
-    ax_delta.set_xticklabels(["$\\Delta$AUPRC", "$\\Delta$F1"], fontsize=6.4)
-    ax_delta.set_yticks(range(len(rows)))
-    ax_delta.set_yticklabels(rows, fontsize=6.2)
-    ax_delta.set_title("(c) vs the best baseline", loc="left", fontsize=7.2)
-    ax_delta.set_xticks(np.arange(-0.5, 2, 1), minor=True)
-    ax_delta.set_yticks(np.arange(-0.5, len(rows), 1), minor=True)
-    ax_delta.grid(which="minor", color="white", lw=0.8)
-    ax_delta.tick_params(which="minor", length=0)
-    ax_delta.tick_params(axis="y", length=0)
-    for spine in ax_delta.spines.values():
-        spine.set_visible(False)
-    colorbar = fig.colorbar(image, ax=ax_delta, fraction=0.05, pad=0.06)
-    colorbar.ax.tick_params(labelsize=5.6)
-    colorbar.set_label("percentage points", fontsize=5.8)
+    fig.legend(handles=handles, loc="lower center", ncol=4, fontsize=6.0,
+               bbox_to_anchor=(0.77, 0.005), handletextpad=0.4, columnspacing=1.2)
 
     offenders = canvas_qa(fig) + legend_overlap_qa(fig)
     stem = save_pub(fig, args.out_dir, args.name)
