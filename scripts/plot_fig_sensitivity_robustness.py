@@ -50,7 +50,7 @@ GROUPS = [
         ("lambda000", "0"), ("lambda025", "0.25"), ("lambda050", "0.5"),
         ("lambda100", "1.0"), ("lambda200", "2.0"),
     ]),
-    ("boundary temperature $\\tau_b$", [
+    ("boundary temperature $\\tau_{\\mathrm{final}}$", [
         ("tau005", "0.05"), ("tau025", "0.25"), ("tau050", "0.50"), ("tau100", "1.00"),
     ]),
     ("boundary rates $(r_A,r_E)$", [
@@ -265,7 +265,7 @@ def tag_for(group: str, name: str) -> str:
         "prototypes $K$": "prototypes",
         "prototype temperature $\\tau_p$": "prototype_temperature",
         "prototype scale $\\lambda_p$": "prototype_scale",
-        "boundary temperature $\\tau_b$": "boundary_temperature",
+        "boundary temperature $\\tau_{\\mathrm{final}}$": "boundary_temperature",
         "boundary rates $(r_A,r_E)$": "boundary_rate",
         "temporal radius $R_l$": "temporal_radius",
         "semantic neighbours $K_l$": "semantic_neighbors",
