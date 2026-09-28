@@ -30,24 +30,43 @@ import time
 from pathlib import Path
 
 
+JOB_SCRIPTS = (
+    "train.py",
+    "run_entity_holdout.py",
+    "run_label_scarcity.py",
+    "run_ladder.py",
+    "run_parsing_noise.py",
+    "dump_test_scores.py",
+    "evaluate_seen_unseen.py",
+    "preprocess.py",
+)
+
+
 def training_running() -> bool:
-    """True when another train.py / holdout driver process is alive."""
+    """True only when another *python* job is alive.
+
+    Wrapper processes must be ignored: a finished ``run_entity_holdout.bat``
+    stays alive at its ``pause`` prompt, and counting its command line as "still
+    training" made the queue wait forever on 2026-09-28.
+    """
     try:
         import psutil  # type: ignore
     except Exception:
         psutil = None
     if psutil is not None:
-        for process in psutil.process_iter(["cmdline"]):
-            cmdline = " ".join(process.info.get("cmdline") or [])
-            if ("scripts/train.py" in cmdline or "scripts\\train.py" in cmdline
-                    or "run_entity_holdout" in cmdline):
-                if process.pid != os.getpid():
-                    return True
+        for process in psutil.process_iter(["name", "cmdline"]):
+            name = (process.info.get("name") or "").lower()
+            if not name.startswith("python"):
+                continue
+            if process.pid == os.getpid():
+                continue
+            cmdline = " ".join(process.info.get("cmdline") or []).replace("\\", "/")
+            if any(script in cmdline for script in JOB_SCRIPTS):
+                return True
         return False
-    # Fallback: look for the process list through tasklist.
-    output = subprocess.run(["wmic", "process", "get", "CommandLine"],
+    output = subprocess.run(["tasklist", "/FI", "IMAGENAME eq python.exe"],
                             capture_output=True, text=True).stdout
-    return "scripts\\train.py" in output or "scripts/train.py" in output
+    return output.lower().count("python.exe") > 1
 
 
 def main() -> None:
