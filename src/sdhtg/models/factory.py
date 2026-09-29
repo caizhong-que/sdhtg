@@ -8,7 +8,8 @@ import torch
 import yaml
 
 from .config import SDHTGModelConfig
-from .baselines import FlatGraphBaseline, TCNBaseline, TransformerBaseline
+from .baselines import (FlatGraphBaseline, MaskedTemplateTransformer,
+                        TCNBaseline, TransformerBaseline)
 from .sdhtg import SDHTG
 
 
@@ -51,4 +52,6 @@ def build_model(
         return TransformerBaseline(config)
     if config.arch == "gnn_flat":
         return FlatGraphBaseline(config)
+    if config.arch == "masked_template":
+        return MaskedTemplateTransformer(config)
     return SDHTG(config)

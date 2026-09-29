@@ -86,8 +86,14 @@ def main() -> None:
     parser.add_argument("--config", default=None)
     parser.add_argument("--ladder", default="ladder_full")
     parser.add_argument("--level", default="L7")
+    parser.add_argument("--tag", default=None,
+                        help="explicit run tag relative to the output dir "
+                             "(e.g. baseline_tcn); overrides --ladder/--level")
     parser.add_argument("--seeds", nargs="+", type=int, default=[42])
     parser.add_argument("--model-config", default="configs/model/sdhtg.yaml")
+    parser.add_argument("--arch", default=None,
+                        help="override model.arch (tcn / transformer / gnn_flat) when the "
+                             "checkpoint belongs to a unified-protocol baseline")
     parser.add_argument("--max-samples", type=int, default=None)
     parser.add_argument("--data-dir", default=None)
     parser.add_argument("--batch-size", type=int, default=2048)
@@ -99,6 +105,8 @@ def main() -> None:
     vocab = json.loads((processed / "vocab.json").read_text(encoding="utf-8"))
     overrides = {f"{name}_vocab_size": len(vocab[name])
                  for name in ("template", "entity", "action", "status")}
+    if args.arch:
+        overrides["arch"] = args.arch
     frame = pd.read_parquet(processed / "sessions.parquet", columns=["split", "label"])
     test_mask = frame["split"].to_numpy() == "test"
     test_frame = frame[test_mask].reset_index(drop=True)
@@ -112,7 +120,8 @@ def main() -> None:
     sampler = BucketBatchSampler(lengths, args.batch_size, indices)
 
     for seed in args.seeds:
-        run_dir = Path(config["output_dir"]) / args.ladder / args.level / f"seed_{seed}"
+        relative = args.tag if args.tag else f"{args.ladder}/{args.level}"
+        run_dir = Path(config["output_dir"]) / relative / f"seed_{seed}"
         checkpoint = run_dir / "checkpoints" / "best.pt"
         if not checkpoint.is_file():
             print(f"!! missing {checkpoint}")
@@ -139,7 +148,7 @@ def main() -> None:
         }).sort_values("index")
         target = run_dir / "test_scores.csv"
         table.to_csv(target, index=False)
-        print(f"== {args.dataset} {args.level} seed {seed}: {len(table)} rows -> {target}")
+        print(f"== {args.dataset} {relative} seed {seed}: {len(table)} rows -> {target}")
         del model
         torch.cuda.empty_cache()
 

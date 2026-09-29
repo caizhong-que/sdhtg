@@ -11,6 +11,10 @@ graph encoder rather than from the input representation.
     TransformerBaseline  encoder-only Transformer with padding masks
     FlatGraphBaseline    single-level event graph (temporal + semantic edges),
                          no learned boundaries and no hierarchy
+    MaskedTemplateTransformer
+                         TransformerBaseline plus a weight-tied masked-template
+                         prediction head, i.e. the LogBERT-style pretraining
+                         route under the same unified input protocol
 """
 
 import math
@@ -243,6 +247,87 @@ class TransformerBaseline(nn.Module):
             self.config, anomaly_logit, logit, embedding, distances, distance,
             nearest, diversity, gates, batch,
         )
+
+
+class MaskedTemplateTransformer(nn.Module):
+    """LogBERT-style baseline: masked-template pretraining with the same encoder.
+
+    The encoder and the classification head are identical to
+    :class:`TransformerBaseline`, so the only difference to that baseline is the
+    pretraining objective: a weight-tied head predicts masked template ids, as
+    in masked-language-model pretraining for logs.  No prototypes are used, so
+    the module isolates the pretraining route rather than the detector.
+    """
+
+    def __init__(self, config: SDHTGModelConfig):
+        super().__init__()
+        self.config = config
+        hidden = config.hidden_dim
+        self.features = BaselineEventFeatures(config)
+        self.position_projection = nn.Linear(1, hidden)
+        layer = nn.TransformerEncoderLayer(
+            d_model=hidden,
+            nhead=config.graph_heads,
+            dim_feedforward=hidden * 4,
+            dropout=config.dropout,
+            batch_first=True,
+            norm_first=True,
+            activation="gelu",
+        )
+        self.encoder = nn.TransformerEncoder(layer, num_layers=config.graph_layers)
+        self.embedding_projection = nn.Linear(hidden * 2, hidden)
+        self.head = nn.Sequential(
+            nn.Linear(hidden, hidden),
+            nn.GELU(),
+            nn.Dropout(config.dropout),
+            nn.LayerNorm(hidden),
+            nn.Linear(hidden, 1),
+        )
+        self.mlm_head = nn.Linear(hidden, config.template_vocab_size, bias=False)
+        # Weight tying with the template embedding, as in BERT-style log models.
+        self.mlm_head.weight = self.features.template_embedding.weight
+
+    def _encode(self, batch: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
+        mask = batch["mask"]
+        values, gates = self.features(batch)
+        steps = values.shape[1]
+        positions = torch.arange(steps, device=values.device, dtype=values.dtype)
+        positions = (positions / max(steps - 1, 1)).view(1, steps, 1)
+        positions = positions.expand(values.shape[0], steps, 1)
+        values = values + self.position_projection(positions)
+        encoded = self.encoder(values, src_key_padding_mask=~mask)
+        return zero_padding(encoded, mask), gates
+
+    def forward(self, batch, **_kwargs) -> SDHTGOutput:
+        encoded, gates = self._encode(batch)
+        mask = batch["mask"]
+        pooled = torch.cat(
+            (masked_mean(encoded, mask, dim=1), _masked_max(encoded, mask)), dim=-1
+        )
+        embedding = self.embedding_projection(pooled)
+        logit = self.head(embedding).squeeze(-1)
+        zeros = logit * 0.0
+        return _output(
+            self.config,
+            logit,
+            logit,
+            embedding,
+            torch.zeros(
+                mask.shape[0], self.config.num_normal_prototypes,
+                device=mask.device, dtype=encoded.dtype,
+            ),
+            zeros,
+            torch.zeros_like(mask, dtype=torch.long),
+            zeros,
+            gates,
+            batch,
+        )
+
+    def forward_mlm(self, batch: dict[str, Tensor]) -> Tensor:
+        """Template logits for every position (used by the pretraining stage)."""
+
+        encoded, _ = self._encode(batch)
+        return self.mlm_head(encoded)
 
 
 class FlatGraphMessageLayer(nn.Module):

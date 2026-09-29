@@ -171,9 +171,11 @@ class SDHTGModelConfig:
             self.prototype_scale_override < 0
         ):
             raise ValueError("prototype_scale_override must be non-negative")
-        if self.arch not in {"sdhtg", "tcn", "transformer", "gnn_flat"}:
+        if self.arch not in {"sdhtg", "tcn", "transformer", "gnn_flat",
+                             "masked_template"}:
             raise ValueError(
-                f"arch must be sdhtg/tcn/transformer/gnn_flat, got {self.arch!r}"
+                "arch must be sdhtg/tcn/transformer/gnn_flat/masked_template, "
+                f"got {self.arch!r}"
             )
         if self.detector_pool_temperature <= 0:
             raise ValueError("detector_pool_temperature must be positive")
