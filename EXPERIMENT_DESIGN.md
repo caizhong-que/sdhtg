@@ -581,3 +581,33 @@ F1 偏移来自阈值校准且无系统方向。
 `outputs/hdfs/main/ladder_full/L7/seed_*/test_scores.csv`（2 个种子，20000 样本分层
 子采样）已生成；若要与基线同图比较，还需为 TCN/Transformer/GNN-flat 追加同样
 的分数导出（SSH 约 2 分钟，HDFS 约 30 分钟）。
+
+## 14. PR/阈值曲线与掩码模板预训练基线（2026-09-29）
+
+### 14.1 逐样本分数与图 4
+
+`scripts/dump_curve_scores.py` 为 5 个方法（GRU-flat/L0、TCN、Transformer、GNN-flat、
+SDHTG）导出逐样本分数：SSH 5 种子全覆盖、HDFS 2 种子 × 20000 分层子采样。基线
+checkpoint 的模型配置在磁盘清理时丢失，脚本按 state-dict 形状在 sdhtg.yaml 之上
+只覆盖 `arch` 重建（TCN/Transformer/GNN-flat 均能严格加载）。
+
+`scripts/plot_fig_pr_threshold.py` 生成图 4：(a) SSH 精确率--召回率曲线（5 种子
+平均，AUPRC 0.992/0.986/0.974/0.747/0.417）；(b) HDFS F1--阈值曲线（2 种子、20k
+子采样，圆圈为验证集校准阈值）：排序指标饱和时差异出现在校准后的工作点
+（SDHTG 0.993 对 TCN 0.953、Transformer 0.944、GRU-flat 0.939、GNN-flat 0.906）。
+注意 HDFS 子采样上的 AUPRC 与全测试集不同（SDHTG 0.9677 对 0.9974），因此正文
+只引用 F1 与曲线形状。
+
+### 14.2 掩码模板预训练基线（LogBERT 路线）
+
+实现：`MaskedTemplateTransformer`（`src/sdhtg/models/baselines.py`，arch
+`masked_template`）+ `scripts/train_mlm_baseline.py`（10 轮 15% 掩码模板预测，
+再按主协议微调：CB-Focal、验证集 AUPRC 早停、验证集 F1 阈值校准）。它与平铺
+Transformer 共享输入字段、编码器深度/宽度与微调目标，只差预训练目标。
+
+SSH（5 种子）：Transformer 0.7484±0.0905 / F1 0.7132 → **+掩码模板预训练
+0.8953±0.0245 / 0.7634**（ΔAUPRC +14.69 个百分点，5/5 同向，p=0.0625、
+Cliff δ=+1.00）；SDHTG 参考 0.9922/0.9565 → 预训练基线仍低 9.69 个百分点。
+OpenStack（5 种子）三者饱和不可区分（AUPRC ≥0.9994）。结论：本文收益不能由
+掩码模板预训练解释；该基线在 BGL 上补跑 1 个种子（进行中），HDFS 与 Thunderbird
+未纳入（单次训练数小时至数十小时且已饱和）。
