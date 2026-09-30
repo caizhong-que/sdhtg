@@ -87,7 +87,7 @@ def main() -> None:
         # SDHTG and GRU-flat sit on top of each other at recall 0.5, so the two
         # labels are pushed apart vertically.
         offset = {"SDHTG": 0.055, "GRU-flat": -0.065}.get(label, 0.028)
-        ax_pr.text(0.52, anchor + offset, f"{label} {np.mean(auprcs):.3f}",
+        ax_pr.text(0.72, anchor + offset, f"{label} {np.mean(auprcs):.3f}",
                    color=colour, fontsize=5.0, va="bottom", ha="left")
     ax_pr.set_xlabel("recall")
     ax_pr.set_ylabel("precision")
@@ -130,9 +130,9 @@ def main() -> None:
     ax_f1.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
     ax_f1.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax_f1.set_title("(b) HDFS F1 vs threshold (mean of 2 seeds)", loc="left", fontsize=7.2)
-    ax_f1.text(0.97, 0.045, "circles: validation-calibrated threshold",
-               transform=ax_f1.transAxes, ha="right", va="bottom", fontsize=4.9,
-               color=PALETTE["neutral_mid"])
+    # ax_f1.text(0.97, 0.045, "circles: validation-calibrated threshold",
+    #            transform=ax_f1.transAxes, ha="right", va="bottom", fontsize=4.9,
+    #            color=PALETTE["neutral_mid"])
 
     handles = [plt.Line2D([], [], color=colour, lw=1.2, ls=style, label=label)
                for _, label, colour, style in METHODS]

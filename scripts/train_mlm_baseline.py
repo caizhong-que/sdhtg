@@ -91,7 +91,7 @@ def masked_template_batch(batch, probability: float, generator):
     rand = torch.rand(template.shape, device=template.device, generator=generator)
     selected = mask & (rand < probability)
     if selected.sum() == 0:
-        return None, None
+        return None, None, None
     targets = template[selected].clone()
     corrupted = template.clone()
     corrupted[selected] = UNK

@@ -13,6 +13,7 @@ data/processed/
 
 # Outputs
 outputs/
+figure/
 
 # IDE
 .vscode/

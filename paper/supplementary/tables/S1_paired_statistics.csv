@@ -1,0 +1,27 @@
+﻿family,dataset,comparison,metric,delta_pt,p_wilcoxon,q_holm,cliff_delta,paired_seeds
+primary,ssh,GRU-flat (L0),f1,0.5044349644327983,1.0,1.0,-0.04,5
+primary,ssh,GRU-flat (L0),auprc,0.6861053951526697,0.3125,0.625,0.28,5
+primary,hdfs,TCN,f1,4.0247774538948455,0.0625,0.3125,1.0,5
+primary,hdfs,Transformer,auprc,-0.21910291798289405,0.0625,0.3125,-1.0,5
+primary,bgl,GNN-flat,f1,0.017766902518090433,0.3125,0.9375,0.36,5
+primary,bgl,GNN-flat,auprc,-0.0015214589831336056,0.1875,0.5625,-0.44,5
+primary,openstack,GRU-flat (L0),f1,-0.0003834755633591591,1.0,1.0,-0.12,5
+primary,openstack,GRU-flat (L0),auprc,-0.0007203288607926517,1.0,1.0,-0.04,5
+primary,thunderbird,GNN-flat,f1,-0.29939344671138235,0.0625,0.3125,-1.0,5
+primary,thunderbird,GNN-flat,auprc,-0.09479749575405094,0.125,0.5,-0.68,5
+vs GRU-flat (L0),ssh,GRU-flat (L0),f1,0.5044349644327983,1.0,1.0,-0.04,5
+vs GRU-flat (L0),ssh,GRU-flat (L0),auprc,0.6861053951526697,0.3125,1.0,0.28,5
+vs GRU-flat (L0),hdfs,GRU-flat (L0),f1,5.412352072260962,0.0625,0.3125,1.0,5
+vs GRU-flat (L0),hdfs,GRU-flat (L0),auprc,-0.09576707354148617,0.4375,1.0,-0.52,5
+vs GRU-flat (L0),bgl,GRU-flat (L0),f1,0.05920969826886946,0.1875,0.75,0.76,5
+vs GRU-flat (L0),bgl,GRU-flat (L0),auprc,0.0013817005820260242,0.4375,1.0,0.44,5
+vs GRU-flat (L0),openstack,GRU-flat (L0),f1,-0.0003834755633591591,1.0,1.0,-0.12,5
+vs GRU-flat (L0),openstack,GRU-flat (L0),auprc,-0.0007203288607926517,1.0,1.0,-0.04,5
+vs GRU-flat (L0),thunderbird,GRU-flat (L0),f1,-7.191361000025154e-05,1.0,1.0,0.08,5
+vs GRU-flat (L0),thunderbird,GRU-flat (L0),auprc,0.05431600207180809,0.3125,1.0,0.28,5
+module step,hdfs,多正常原型 L7 vs L6,f1,9.891763593765345,0.0625,0.375,1.0,5
+module step,hdfs,完整模型 L7 vs L0,f1,5.412352072260962,0.0625,0.375,1.0,5
+module step,hdfs,原型多样/均衡 L7b vs L7,f1,-0.8561424840793697,0.1875,0.5625,-0.28,5
+module step,ssh,多正常原型 L7 vs L6,f1,1.3905536086653458,0.0625,0.375,0.36,5
+module step,ssh,完整模型 L7 vs L0,f1,0.5044349644327983,1.0,1.0,-0.04,5
+module step,ssh,原型多样/均衡 L7b vs L7,f1,-1.4657321593671058,0.25,0.5625,-0.4,5

@@ -1,0 +1,508 @@
+{
+  "primary": [
+    {
+      "dataset": "ssh",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9514629807832502,
+      "treatment_mean": 0.9565073304275782,
+      "delta": 0.005044349644327983,
+      "p": 1.0,
+      "cliff": -0.04,
+      "q": 1.0
+    },
+    {
+      "dataset": "ssh",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9853794120095275,
+      "treatment_mean": 0.9922404659610542,
+      "delta": 0.006861053951526697,
+      "p": 0.3125,
+      "cliff": 0.28,
+      "q": 0.625
+    },
+    {
+      "dataset": "hdfs",
+      "control": "baseline_tcn",
+      "control_label": "TCN",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9529520873282203,
+      "treatment_mean": 0.9931998618671688,
+      "delta": 0.040247774538948455,
+      "p": 0.0625,
+      "cliff": 1.0,
+      "q": 0.3125
+    },
+    {
+      "dataset": "hdfs",
+      "control": "baseline_transformer",
+      "control_label": "Transformer",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.999598573864907,
+      "treatment_mean": 0.9974075446850781,
+      "delta": -0.0021910291798289405,
+      "p": 0.0625,
+      "cliff": -1.0,
+      "q": 0.3125
+    },
+    {
+      "dataset": "bgl",
+      "control": "baseline_gnn_flat",
+      "control_label": "GNN-flat",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9985626012838387,
+      "treatment_mean": 0.9987402703090196,
+      "delta": 0.00017766902518090433,
+      "p": 0.3125,
+      "cliff": 0.36,
+      "q": 0.9375
+    },
+    {
+      "dataset": "bgl",
+      "control": "baseline_gnn_flat",
+      "control_label": "GNN-flat",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9999891640617585,
+      "treatment_mean": 0.9999739494719272,
+      "delta": -1.5214589831336056e-05,
+      "p": 0.1875,
+      "cliff": -0.44,
+      "q": 0.5625
+    },
+    {
+      "dataset": "openstack",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9991266375545852,
+      "treatment_mean": 0.9991228027989516,
+      "delta": -3.834755633591591e-06,
+      "p": 1.0,
+      "cliff": -0.12,
+      "q": 1.0
+    },
+    {
+      "dataset": "openstack",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9999847111608526,
+      "treatment_mean": 0.9999775078722447,
+      "delta": -7.203288607926517e-06,
+      "p": 1.0,
+      "cliff": -0.04,
+      "q": 1.0
+    },
+    {
+      "dataset": "thunderbird",
+      "control": "baseline_gnn_flat",
+      "control_label": "GNN-flat",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9988976827491797,
+      "treatment_mean": 0.9959037482820658,
+      "delta": -0.0029939344671138235,
+      "p": 0.0625,
+      "cliff": -1.0,
+      "q": 0.3125
+    },
+    {
+      "dataset": "thunderbird",
+      "control": "baseline_gnn_flat",
+      "control_label": "GNN-flat",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9997996749273248,
+      "treatment_mean": 0.9988516999697843,
+      "delta": -0.0009479749575405094,
+      "p": 0.125,
+      "cliff": -0.68,
+      "q": 0.5
+    }
+  ],
+  "baseline": [
+    {
+      "dataset": "ssh",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9514629807832502,
+      "treatment_mean": 0.9565073304275782,
+      "delta": 0.005044349644327983,
+      "p": 1.0,
+      "cliff": -0.04,
+      "q": 1.0
+    },
+    {
+      "dataset": "ssh",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9853794120095275,
+      "treatment_mean": 0.9922404659610542,
+      "delta": 0.006861053951526697,
+      "p": 0.3125,
+      "cliff": 0.28,
+      "q": 1.0
+    },
+    {
+      "dataset": "hdfs",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9390763411445592,
+      "treatment_mean": 0.9931998618671688,
+      "delta": 0.05412352072260962,
+      "p": 0.0625,
+      "cliff": 1.0,
+      "q": 0.3125
+    },
+    {
+      "dataset": "hdfs",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.998365215420493,
+      "treatment_mean": 0.9974075446850781,
+      "delta": -0.0009576707354148617,
+      "p": 0.4375,
+      "cliff": -0.52,
+      "q": 1.0
+    },
+    {
+      "dataset": "bgl",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9981481733263309,
+      "treatment_mean": 0.9987402703090196,
+      "delta": 0.0005920969826886946,
+      "p": 0.1875,
+      "cliff": 0.76,
+      "q": 0.75
+    },
+    {
+      "dataset": "bgl",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9999601324661069,
+      "treatment_mean": 0.9999739494719272,
+      "delta": 1.3817005820260242e-05,
+      "p": 0.4375,
+      "cliff": 0.44,
+      "q": 1.0
+    },
+    {
+      "dataset": "openstack",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9991266375545852,
+      "treatment_mean": 0.9991228027989516,
+      "delta": -3.834755633591591e-06,
+      "p": 1.0,
+      "cliff": -0.12,
+      "q": 1.0
+    },
+    {
+      "dataset": "openstack",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9999847111608526,
+      "treatment_mean": 0.9999775078722447,
+      "delta": -7.203288607926517e-06,
+      "p": 1.0,
+      "cliff": -0.04,
+      "q": 1.0
+    },
+    {
+      "dataset": "thunderbird",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9959044674181659,
+      "treatment_mean": 0.9959037482820658,
+      "delta": -7.191361000025154e-07,
+      "p": 1.0,
+      "cliff": 0.08,
+      "q": 1.0
+    },
+    {
+      "dataset": "thunderbird",
+      "control": "ladder_full/L0",
+      "control_label": "GRU-flat (L0)",
+      "metric": "auprc",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9983085399490662,
+      "treatment_mean": 0.9988516999697843,
+      "delta": 0.0005431600207180809,
+      "p": 0.3125,
+      "cliff": 0.28,
+      "q": 1.0
+    }
+  ],
+  "modules": [
+    {
+      "dataset": "hdfs",
+      "control": "ladder_full/L6",
+      "treatment": "ladder_full/L7",
+      "label": "\u591a\u6b63\u5e38\u539f\u578b L7 vs L6",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.8942822259295153,
+      "treatment_mean": 0.9931998618671688,
+      "delta": 0.09891763593765346,
+      "p": 0.0625,
+      "cliff": 1.0,
+      "q": 0.375
+    },
+    {
+      "dataset": "hdfs",
+      "control": "ladder_full/L0",
+      "treatment": "ladder_full/L7",
+      "label": "\u5b8c\u6574\u6a21\u578b L7 vs L0",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9390763411445592,
+      "treatment_mean": 0.9931998618671688,
+      "delta": 0.05412352072260962,
+      "p": 0.0625,
+      "cliff": 1.0,
+      "q": 0.375
+    },
+    {
+      "dataset": "hdfs",
+      "control": "ladder_full/L7",
+      "treatment": "ladder_full/L7b",
+      "label": "\u539f\u578b\u591a\u6837/\u5747\u8861 L7b vs L7",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9931998618671688,
+      "treatment_mean": 0.9846384370263751,
+      "delta": -0.008561424840793697,
+      "p": 0.1875,
+      "cliff": -0.28,
+      "q": 0.5625
+    },
+    {
+      "dataset": "ssh",
+      "control": "ladder_full/L6",
+      "treatment": "ladder_full/L7",
+      "label": "\u591a\u6b63\u5e38\u539f\u578b L7 vs L6",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9426017943409247,
+      "treatment_mean": 0.9565073304275782,
+      "delta": 0.013905536086653458,
+      "p": 0.0625,
+      "cliff": 0.36,
+      "q": 0.375
+    },
+    {
+      "dataset": "ssh",
+      "control": "ladder_full/L0",
+      "treatment": "ladder_full/L7",
+      "label": "\u5b8c\u6574\u6a21\u578b L7 vs L0",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9514629807832502,
+      "treatment_mean": 0.9565073304275782,
+      "delta": 0.005044349644327983,
+      "p": 1.0,
+      "cliff": -0.04,
+      "q": 1.0
+    },
+    {
+      "dataset": "ssh",
+      "control": "ladder_full/L7",
+      "treatment": "ladder_full/L7b",
+      "label": "\u539f\u578b\u591a\u6837/\u5747\u8861 L7b vs L7",
+      "metric": "f1",
+      "seeds": [
+        42,
+        123,
+        256,
+        512,
+        1024
+      ],
+      "control_mean": 0.9565073304275782,
+      "treatment_mean": 0.9418500088339071,
+      "delta": -0.014657321593671058,
+      "p": 0.25,
+      "cliff": -0.4,
+      "q": 0.5625
+    }
+  ]
+}

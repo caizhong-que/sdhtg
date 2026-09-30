@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the accompanying manuscript."
+title: "Semantic-Guided Differentiable Hierarchical Temporal Graph Learning for Class-Imbalanced Log Anomaly Detection"
+abstract: >-
+  Reference implementation of SDHTG, a log anomaly detection model that learns
+  strictly nested action-level and entity-level soft boundaries inside a
+  pre-constructed outer sample, uses the resulting soft membership matrix for
+  differentiable hierarchical aggregation and as cross-level edge weights of a
+  heterogeneous temporal graph, and couples the boundary network to the detection
+  objective. The repository contains the preprocessing pipeline, the model and
+  losses, all baselines and ablations, the interpretation and efficiency studies,
+  and the scripts that generate the paper's figures, tables and supplementary
+  material.
+authors:
+  - family-names: "Que"
+    given-names: "Caizhong"
+  - family-names: "Dong"
+    given-names: "Guofang"
+year: 2026
+version: "1.0.0"
+license: MIT
+type: software
+keywords:
+  - log anomaly detection
+  - hierarchical representation learning
+  - differentiable segmentation
+  - heterogeneous graph neural network
+  - class imbalance
+  - contrastive pretraining

@@ -1,0 +1,13 @@
+﻿source,method,HDFS,BGL,Thunderbird,OpenStack,SSH,metric,protocol note
+original paper,HitAnomaly,0.983,0.921,,0.862,,F1,fixed time-window sessions; original Figs. 10/16/11
+original paper,LogAnomaly,0.95,0.96,,,,F1,sliding window of 20 blocks/sessions
+original paper,LogBERT,0.823,0.908,0.966,,,F1,native session sequences; original Table 2
+original paper,LAnoBERT,0.965,0.875,0.999,,,F1,"parser-free masked LM; predictive-probability score, original Table 3"
+original paper,DeepCASE,0.904,,,,,F1,"event sequences, 80% training data; original Appendix E"
+original paper,BASN,0.908,0.912,,0.889,0.871,F1,"differentiable soft-reset single-level boundaries, zero-shot; original Table 6"
+original paper,HLogformer,,,,,,F1,"evaluated on CloudTrail/OKTA/Amazon Reviews, not on LogHub"
+original paper,Log2vec,,,,,,AUC,"CERT/LANL insider-threat detection, not LogHub"
+original paper,DeepTraLog,,,,,,F1,"TrainTicket microservice traces (F1 0.954), different data type"
+third-party reproduction,DeepLog,0.773,0.861,0.931,,,F1,same-protocol reproduction reported by the LogBERT paper
+third-party reproduction,LogAnomaly,0.562,0.741,0.927,,,F1,same source; 0.29 lower than its original protocol
+this work (controlled protocol),SDHTG,0.9932,0.9987,0.9959,0.9991,0.9565,F1,"outer samples, five seeds"

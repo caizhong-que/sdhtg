@@ -1,0 +1,10 @@
+﻿category,representative methods,original protocol (input / label unit),role in this work
+classical sequence,"DeepLog, LogAnomaly","session template sequences, next-event and count anomalies",literature reference
+pretrained language model,"LogBERT, LAnoBERT","masked-template prediction, normal-pattern hypersphere",literature reference
+hierarchical,"HitAnomaly, HLogformer",hierarchical Transformer over session sequences or nested log entries,literature reference
+context construction,DeepCASE,"semi-supervised event clustering, two-stage detection",literature reference
+graph-based,"Log2vec, DeepTraLog",representation learning on log graphs or call graphs,literature reference
+boundary-aware,BASN,"differentiable soft-reset boundaries, no boundary labels",literature reference (closest related work)
+controlled baselines,"GRU-flat, TCN, Transformer, GNN-flat","identical template/entity/action/state/time inputs; no learned boundary, no heterogeneous graph",implemented here (main comparison)
+imbalance learning,"BCE, weighted BCE, focal, CB-focal","same inputs and splits, classification loss / prototype setting replaced",implemented here
+masked-template pretraining,Transformer + masked-template prediction,"identical inputs and encoder, 15% template masking before supervised tuning",implemented here (supplementary baseline)

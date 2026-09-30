@@ -1,0 +1,162 @@
+{
+  "sdhtg": {
+    "32": {
+      "train_ms": 12828.250999981537,
+      "infer_ms_per_sample": 9.258335117237948,
+      "peak_memory_gb": 11.717329978942871,
+      "graph_edges": 942458
+    },
+    "64": {
+      "train_ms": 528.7451400188729,
+      "infer_ms_per_sample": 2.2786306248235633,
+      "peak_memory_gb": 2.232062339782715,
+      "graph_edges": 131816
+    },
+    "128": {
+      "train_ms": 391.5528600104153,
+      "infer_ms_per_sample": 4.504514062500675,
+      "peak_memory_gb": 2.2821364402770996,
+      "graph_edges": 138136
+    },
+    "256": {
+      "train_ms": 986.5685600088909,
+      "infer_ms_per_sample": 11.378743124805624,
+      "peak_memory_gb": 4.673333644866943,
+      "graph_edges": 288014
+    },
+    "512": {
+      "train_ms": 5756.1273199971765,
+      "infer_ms_per_sample": 28.378515937947668,
+      "peak_memory_gb": 9.842910766601562,
+      "graph_edges": 607208
+    }
+  },
+  "gru_flat": {
+    "32": {
+      "train_ms": 36.84350000694394,
+      "infer_ms_per_sample": 0.027592968717726762,
+      "peak_memory_gb": 0.918121337890625,
+      "graph_edges": 0
+    },
+    "64": {
+      "train_ms": 25.229760026559234,
+      "infer_ms_per_sample": 0.07589390606881352,
+      "peak_memory_gb": 0.49167585372924805,
+      "graph_edges": 0
+    },
+    "128": {
+      "train_ms": 27.78018000535667,
+      "infer_ms_per_sample": 0.18315156194148585,
+      "peak_memory_gb": 0.49127197265625,
+      "graph_edges": 0
+    },
+    "256": {
+      "train_ms": 53.103079996071756,
+      "infer_ms_per_sample": 0.4638587499357527,
+      "peak_memory_gb": 0.9146661758422852,
+      "graph_edges": 0
+    },
+    "512": {
+      "train_ms": 102.7484399965033,
+      "infer_ms_per_sample": 0.639700625470141,
+      "peak_memory_gb": 1.76393461227417,
+      "graph_edges": 0
+    }
+  },
+  "tcn": {
+    "32": {
+      "train_ms": 42.80602000653744,
+      "infer_ms_per_sample": 0.025767734359760652,
+      "peak_memory_gb": 0.5791277885437012,
+      "graph_edges": 0
+    },
+    "64": {
+      "train_ms": 18.424979969859123,
+      "infer_ms_per_sample": 0.04831531277886825,
+      "peak_memory_gb": 0.29868412017822266,
+      "graph_edges": 0
+    },
+    "128": {
+      "train_ms": 18.400659994222224,
+      "infer_ms_per_sample": 0.0996012498944765,
+      "peak_memory_gb": 0.29483604431152344,
+      "graph_edges": 0
+    },
+    "256": {
+      "train_ms": 35.88509999681264,
+      "infer_ms_per_sample": 0.20389749952300917,
+      "peak_memory_gb": 0.5513286590576172,
+      "graph_edges": 0
+    },
+    "512": {
+      "train_ms": 75.67153999116272,
+      "infer_ms_per_sample": 0.4519787500612438,
+      "peak_memory_gb": 1.0650463104248047,
+      "graph_edges": 0
+    }
+  },
+  "transformer": {
+    "32": {
+      "train_ms": 62.33345998916775,
+      "infer_ms_per_sample": 0.05329726559466508,
+      "peak_memory_gb": 0.9759917259216309,
+      "graph_edges": 0
+    },
+    "64": {
+      "train_ms": 31.491219997406006,
+      "infer_ms_per_sample": 0.08012734360818285,
+      "peak_memory_gb": 0.5135421752929688,
+      "graph_edges": 0
+    },
+    "128": {
+      "train_ms": 32.166800019331276,
+      "infer_ms_per_sample": 0.16263093712041155,
+      "peak_memory_gb": 0.5134782791137695,
+      "graph_edges": 0
+    },
+    "256": {
+      "train_ms": 68.41070004738867,
+      "infer_ms_per_sample": 0.3369821875821799,
+      "peak_memory_gb": 0.9755373001098633,
+      "graph_edges": 0
+    },
+    "512": {
+      "train_ms": 159.07762001734227,
+      "infer_ms_per_sample": 0.7842643746698741,
+      "peak_memory_gb": 1.8950166702270508,
+      "graph_edges": 0
+    }
+  },
+  "gnn_flat": {
+    "32": {
+      "train_ms": 2800.9547599824145,
+      "infer_ms_per_sample": 2.7479742578179867,
+      "peak_memory_gb": 2.7564306259155273,
+      "graph_edges": 243316
+    },
+    "64": {
+      "train_ms": 814.5895600086078,
+      "infer_ms_per_sample": 3.8138768750286545,
+      "peak_memory_gb": 1.4718947410583496,
+      "graph_edges": 131778
+    },
+    "128": {
+      "train_ms": 592.7728000096977,
+      "infer_ms_per_sample": 5.673485312581761,
+      "peak_memory_gb": 1.551076889038086,
+      "graph_edges": 138176
+    },
+    "256": {
+      "train_ms": 1008.1553799565881,
+      "infer_ms_per_sample": 11.83361031289678,
+      "peak_memory_gb": 3.2261533737182617,
+      "graph_edges": 287914
+    },
+    "512": {
+      "train_ms": 2143.3737399987876,
+      "infer_ms_per_sample": 26.278581562655745,
+      "peak_memory_gb": 6.488305568695068,
+      "graph_edges": 606772
+    }
+  }
+}

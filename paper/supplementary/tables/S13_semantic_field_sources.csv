@@ -1,0 +1,7 @@
+﻿field,construction,source of the labels,leakage control
+template,"Drain parser (depth 4, similarity 0.5)","fitted on training-split events only, then frozen",test/validation templates unseen in training map to UNK_TEMPLATE
+action,deterministic prior dictionary over training template texts,fixed before seeing any labels,"no test-set templates, no LLM, no external anomaly knowledge"
+state,deterministic status dictionary plus template-identity fallback,fixed before seeing any labels,explicit anomaly words (failed/error/timeout) are ablated in Section 6.4
+entity,"dataset-specific key (node, block id, host, service)",taken from the raw log fields,train-side vocabulary; unseen entities map to a placeholder
+time,"per-event inter-arrival gap, continuous-time encoding",derived from the timestamps within an outer sample,no cross-split statistics are used
+adaptive idle threshold,median inter-event gap per entity x 2 (capped 3600 s),estimated on the training partition only,validation/test partitions never re-estimate the threshold
