@@ -6,6 +6,10 @@
 manuscript/SDHTG_manuscript.pdf     submission PDF (Springer Nature template)
 manuscript/sn-article.tex           LaTeX source (requires the publisher's sn-jnl.cls)
 manuscript/sn-bibliography.bib      bibliography
+supplementary/Supplementary_Information.pdf   single SI PDF (cover page, Text S1-S2,
+                                              Tables S1-S13, Figures S1-S2, references)
+supplementary/Supplementary_Information.tex   LaTeX source of the SI
+supplementary/Source_Data_1.xlsx    per-seed source data (11 worksheets, all 724 runs)
 supplementary/tables/               Supplementary Tables S1-S13 (CSV, UTF-8 BOM)
 supplementary/figures/              Supplementary Figures S1-S2 (PDF/PNG/SVG)
 supplementary/source_data/          per-seed metrics for all 724 runs, statistics report,
@@ -13,6 +17,17 @@ supplementary/source_data/          per-seed metrics for all 724 runs, statistic
 supplementary/protocol/             experiment design and data-provenance hashes
 supplementary/Supplementary_information_statement.md   text to paste into the manuscript
 supplementary/README_索引与提交说明.md                 index and submission notes (Chinese)
+```
+
+## Building the supplementary PDF
+
+```bash
+python scripts/make_supplementary.py            # tables S1-S13 as CSV + source data
+python scripts/make_supplementary_part2.py      # statistics, hyper-parameters, reference tables
+python scripts/make_supplementary_pdf.py        # Supplementary_Information.tex
+python scripts/make_source_data_workbook.py     # Source_Data_1.xlsx
+cd ../文章/"Download+the+journal+article+template+package+(December+2024+version)"/supplementary
+xelatex -interaction=nonstopmode Supplementary_Information.tex   # run twice
 ```
 
 ## Element-to-script map

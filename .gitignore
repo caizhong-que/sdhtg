@@ -28,6 +28,14 @@ Thumbs.db
 *.tmp
 *.swp
 
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.bbl
+*.blg
+
 # Model checkpoints
 *.pt
 !src/sdhtg/**/*.pt

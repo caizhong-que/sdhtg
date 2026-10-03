@@ -1,66 +1,72 @@
-# SDHTG 补充材料索引与提交说明
+# SDHTG 补充材料：索引与提交说明
 
-本目录是**给投稿用的补充/附录材料**，与最终稿所在目录 `sn-article-template/` 平级；
-模板目录内的任何文件都未被修改。
+本目录是**可直接用于投稿**的补充材料，放在最终稿目录 `sn-article-template/` 的**上一级**；
+模板目录内的文件（`sn-article.tex` / `sn-article.pdf` / `sn-jnl.cls` 等）未被改动。
 
-最终稿 `sn-article.tex` 现有 **11 张表 + 7 张图**。其表 2 题注承诺
-“detailed secondary metrics are retained for the supplementary material”，表 6 题注承诺
-“complete seed-level results are provided in the supplementary material”，第 5.4 节声明使用
-Wilcoxon + Holm + Cliff's δ——这些内容都由本目录提供。
+## 一、已生成的文件
 
-## 一、材料清单与对应关系
+| 文件 | 内容 | 投稿时选择的上传类型 |
+|---|---|---|
+| `Supplementary_Information.pdf` | **单一 SI PDF（12 页）**：封面（标题、作者、通讯作者）、内容清单、Supplementary Text S1–S2、Supplementary Tables S1–S13、Supplementary Figures S1–S2、Supplementary References | Supplementary material / Supporting information |
+| `Supplementary_Information.tex` | SI 的 LaTeX 源文件（供期刊要求提供源文件时上传，或后续修改） | 通常不必上传 |
+| `Source_Data_1.xlsx` | **逐种子源数据工作簿**（0.09 MB，11 个工作表，见下） | Source data |
+| `tables/S*.csv` | 与 SI 中表格对应的机器可读版本（UTF-8 BOM，可直接用 Excel/pandas 打开） | 可选，通常并入 Source Data |
+| `figures/SuppFig1–2.{pdf,png,svg}` | 两张补充图的矢量/位图文件 | 期刊要求提供图件时上传 |
+| `protocol/EXPERIMENT_DESIGN.md`、`protocol/data_provenance_and_hashes.csv` | 实验协议与运行清单、数据缓存 SHA-256 | 可选（Supplementary Text 已在 PDF 内） |
+| `Supplementary_information_statement.md` | 可直接粘贴到正文 `\bmhead{Supplementary information}` 的英文声明段落 | 粘贴进正文 |
 
-| 编号 | 内容 | 类型 | 支撑正文位置 | 建议投稿形式 |
-|---|---|---|---|---|
-| S1 | 配对统计检验（Wilcoxon + Holm q + Cliff's δ，三个检验族） | 表 | §5.4 统计方法声明；§6.1–6.3 结论 | Supplementary Table S1 |
-| S2 | 主结果完整次要指标（AUROC / Precision / Recall / MCC / 平衡准确率，5 种子） | 表 | 表 2 题注承诺 | Supplementary Table S2 |
-| S3 | 不平衡学习与原型配置的逐种子结果 | 表 | 表 6 题注承诺 | Supplementary Table S3 |
-| S4 | 最终超参数清单（含“是否做过敏感性扫描”与代码出处） | 表 | §5.5 实现细节 | Supplementary Table S4 |
-| S5 | 参数敏感性扫描（78 个 run 的逐种子值） | 表 | §6.7 稳定性陈述 | Supplementary Table S5 |
-| S6 | 语义与实体捷径消融（45 个 run） | 表 | §6.4 语义稳健性 | Supplementary Table S6 |
-| S7 | 模板级解析噪声配对（改写率 20% 与 40%，32 个 run） | 表 | §6.5 解析噪声 | Supplementary Table S7 |
-| S8 | 实体可辨识性对照（实体留出协议） | 表 | §6.5 实体不可辨识 | Supplementary Table S8 |
-| S9 | 掩码模板预训练基线（LogBERT 路线，统一输入协议） | 表 | §5.3 预训练路线 | Supplementary Table S9 |
-| S10 | 文献参照值（各方法原始协议 + 协议差异说明） | 表 | §5.3 对比协议 | Supplementary Table S10 |
-| S11 | 对比基线分类与本文用法 | 表 | §5.3 | Supplementary Table S11 |
-| S12 | 不同负样本策略的对比预训练 | 表 | §5.4 预训练增强 | Supplementary Table S12 |
-| S13 | 语义字段来源与泄漏控制 | 表 | §5.2 数据协议 | Supplementary Table S13 |
-| SuppFig1 | 训练动力学与配对效应量（含 HDFS 单种子晚期失稳） | 图 | §7.7 复现性限制 | Supplementary Figure S1 |
-| SuppFig2 | 参数敏感性与解析噪声鲁棒性（两档改写率） | 图 | §5.5 / §6.5 | Supplementary Figure S2 |
-| Source Data | 724 个 run 的逐种子指标（含由 P/R 反推的 MCC 与平衡准确率）、统计检验原始输出、效率基准原始记录 | 数据 | 表 2–11、图 2–7 | Source Data（单独上传） |
-| Protocol | 实验设计与运行清单、数据/缓存 SHA-256 清单 | 文本 | §5.2、§7.7、Data Availability | Supplementary Text（可选） |
+## 二、SI PDF 的结构（12 页）
 
-## 二、两种放置方式（二选一）
+1. **封面**：文章标题、作者与单位、通讯作者邮箱、本文包含的内容清单。
+2. **Supplementary Text S1**：实验设计与复现协议（数据与泄漏控制、划分、模型选择与统计口径、复现性）。
+3. **Supplementary Text S2**：数据来源与缓存哈希表（五个数据集缓存的构建时间、代码版本、`sessions.parquet` SHA-256）。
+4. **Supplementary Tables S1–S13**：
 
-1. **作为独立补充材料提交（推荐）**：把 `tables/` 与 `figures/` 的内容按 S1–S13、
-   SuppFig1–2 的编号整理成一个 PDF（或逐表 CSV + 图 PDF），`source_data/` 单独作为
-   Source Data 上传；正文的 `\bmhead{Supplementary information}` 处使用
-   `Supplementary_information_statement.md` 中的段落。
-2. **放进正文附录**：最终稿的 `\begin{appendices} … \end{appendices}` 目前仍是模板占位
-   （“Section title of first appendix”）。若期刊偏好文内附录，可把 `tables/` 的 CSV 转成
-   表格粘贴到该处；注意附录表号会与正文表 1–11 分开编号（A1…），图号同理。
+| 表 | 内容 | 正文对应位置 |
+|---|---|---|
+| S1 | 配对统计检验（Wilcoxon、Holm q、Cliff's δ，含配对单位与可达成的最小 p） | §5.4 统计口径声明 |
+| S2 | 主对比的补充指标（AUROC / Precision / Recall / MCC / 平衡准确率，5 种子） | 表 2 题注承诺 |
+| S3 | 不平衡学习与原型配置（SSH，3 种子） | 表 6 题注承诺 |
+| S4 | 最终超参数（含"是否做过敏感性扫描"与配置文件出处） | §5.5 实现细节 |
+| S5 | 参数敏感性扫描汇总（78 run，逐种子在 Source Data） | §6.7 稳定性陈述 |
+| S6 | 语义与实体捷径消融（SSH，5 种子） | §6.4 |
+| S7 | 解析噪声配对（改写率 20% 与 40%，同一权重与阈值） | §6.5 |
+| S8 | 实体可辨识性（实体留出协议） | §6.5 |
+| S9 | 掩码模板预训练基线（LogBERT 路线，统一输入协议） | §5.3 |
+| S10 | 文献参照值及其协议差异（明确"不可直接比较"） | §5.3 对比协议 |
+| S11 | 基线分类与比较协议（受控 / 复现 / 文献参照） | §5.3 |
+| S12 | 对比预训练的负样本策略 | §5.4 |
+| S13 | 语义字段来源与泄漏控制 | §5.2 数据协议 |
 
-## 三、目录结构
+5. **Supplementary Figures S1–S2**：训练动力学与配对效应量（含 HDFS 单种子晚期失稳）；参数敏感性与解析噪声鲁棒性。
+6. **Supplementary References**：S10 所引用文献的完整条目（11 条），使 SI 自成体系。
 
-```
-supplementary/
-  README_索引与提交说明.md     本文件（不必随稿提交）
-  Supplementary_information_statement.md   可粘贴的正文声明（英文）
-  tables/     S1–S13（CSV，UTF-8 BOM，可直接用 Excel/pandas 打开）
-  figures/    SuppFig1–2（PDF / PNG / SVG）
-  source_data/ per_seed_metrics_all_runs.csv、statistics_report.json、efficiency_benchmark.json
-  protocol/   EXPERIMENT_DESIGN.md、data_provenance_and_hashes.csv
-```
+## 三、Source Data 工作簿（`Source_Data_1.xlsx`）
 
-## 四、作者自查清单（不必随稿提交）
+| 工作表 | 行数 | 内容 |
+|---|---|---|
+| README | 17 | 各工作表说明、列含义、数据来源与生成脚本 |
+| S1 paired statistics | 27 | 三个检验族的 Δ、p、Holm q、Cliff's δ、配对种子数 |
+| S2 main secondary metrics | 26 | 5 数据集 × 5 方法的 AUPRC/AUROC/P/R/F1/MCC/平衡准确率（均值±标准差） |
+| S3 imbalance prototype | 22 | 逐种子 AUPRC/F1 |
+| S5 sensitivity scan | 79 | 78 个敏感性 run 的逐种子验证/测试指标 |
+| S6 semantic shortcuts | 46 | 45 个捷径消融 run 的逐种子指标 |
+| S7 parsing noise | 33 | 32 个配对噪声 run（受噪与配对干净的 AUPRC/F1） |
+| S8 entity identifiability | 13 | 分组指标（seen / holdout / pooled） |
+| S9 masked-template baseline | 42 | 41 个 run 的逐种子指标 |
+| S12 negative sampling | 37 | 36 个预训练 run 的逐种子指标 |
+| all runs per seed | 725 | 仓库内全部 724 个 run 的逐种子指标（含由 P/R 反推的 MCC 与平衡准确率、校准阈值、训练轮数） |
 
-1. **SSH 主协议划分待确认**：`data/processed/ssh` 的实际划分为 1824/259/260
-   （77.8% / 11.1% / 11.1%），且不是按时间排序（train 含最晚一天的会话），与配置
-   隐含的“60/20/20 时序划分”不一致；重跑前不要按现行文字描述该协议。
-2. **跨层消息**：`configs/model/sdhtg.yaml` 与阶梯 L7 均为 `use_cross_level_messages: true`，
-   该模块**属于最终模型**（HDFS 上 ΔF1 = +2.17 个百分点）；中文稿中“按协议移除”的表述
-   已不适用于终稿，英文终稿请勿沿用。
-3. **超参数表**：原稿列出的 $K_m=10$ 在代码中不存在，S4 已按最终代码重写。
-4. 正文 Data/Code Availability 与 Funding 处仍为占位符，需填入仓库地址与基金编号。
-5. S9 的 BGL 只有 1 个种子、SSH/OpenStack 各 5 个；S7 的解析噪声为 2 个种子；
-   引用这些数字时请连同种子数一起写明。
+## 四、提交要点（按通用惯例）
+
+- 目标期刊若提供补充材料模板或专门指南，**以期刊模板为准**；本套材料按"无模板"时的通用惯例组织：单一 SI PDF + 独立 Source Data + 代码仓库。
+- 正文需**至少一次**引用每一项：目前终稿表 2 与表 6 的题注、以及 §5.4 的统计声明已提到"supplementary material"，建议再把具体编号写入正文，例如 "…are provided in Supplementary Table S2"、"…in Supplementary Table S1"（此项属于正文修改，本轮未改动正文文件）。
+- 术语、缩写与正文一致（AUPRC、F1、Cliff's δ、CB-Focal、GRU-flat 等）。
+- 文件体积：SI PDF 约 0.2 MB、Source Data 约 0.09 MB、图件合计约 1.5 MB，均远低于常见的单文件限制（如 50 MB）。
+- 上传时的类型选择：`Supplementary_Information.pdf` → Supplementary material / Supporting information；`Source_Data_1.xlsx` → Source data；`figures/` 仅在期刊要求单独图件时上传。
+
+## 五、仍需注意（不属于补充材料本身）
+
+1. 正文中 Data/Code Availability 与 Funding 仍为占位符，需填仓库地址与基金编号。
+2. 论文中若继续使用 SSH 的"60/20/20 时序划分"表述，需先按仓库 README 的说明重建缓存并重跑；SI 的 Text S1 已按实际协议描述（HDFS/OpenStack 时序，BGL/Thunderbird 随机）。
+3. `Supplementary_Information.pdf` 中存在两处 <5 pt 的排版溢出（表格末行），不影响阅读；如需彻底消除可在 SI 源文件中对相应表格再缩小字号。
